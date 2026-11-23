@@ -375,11 +375,39 @@ function removeRecipe(rid){
   persist(); render();
 }
 function qtyText(it){
-  const parts=it.contribs.map(c=>{
-    const r=S.recipes.find(x=>x.id===c.rid); if(!r||!r.ings[c.i]) return "";
-    const ing=r.ings[c.i], q=fmtQty(ing, r.covers/r.base);
-    return isDerived(ing) ? ((q?q+" ":"")+ing.nom) : q;
-  }).filter(Boolean);
+  // Total à acheter : on additionne tout (jaunes + œufs = œufs, zeste + jus de citron = citrons…)
+  const F=s=>String(s||"").toLowerCase().replace(/œ/g,"oe").normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const fam={}; let citZ=0, citJ=0, any=false;
+  const add=(k,v,label)=>{ if(!fam[k]) fam[k]={v:0,label}; fam[k].v+=v; };
+  for(const c of it.contribs){
+    if(c.qty!==undefined){ if(c.qty) add("txt:"+c.qty,0,c.qty); continue; }
+    const r=S.recipes.find(x=>x.id===c.rid); if(!r||!r.ings[c.i]) continue;
+    const ing=r.ings[c.i], f=r.covers/r.base;
+    const q=(ing.quantite===null||ing.quantite===undefined||ing.quantite===""||isNaN(Number(ing.quantite)))?null:Number(ing.quantite)*f;
+    const u=F(ing.unite).trim().replace(/\.$/,""), nom=F(ing.nom);
+    const ml = q===null?null : (u==="cl"?q*10 : (u==="ml"?q : (/^(l|litre|litres)$/.test(u)?q*1000:null)));
+    if(isDerived(ing)){
+      if(/^(jaune|blanc)/.test(nom)){ add("n",q===null?1:q,""); continue; }
+      if(/^zeste/.test(nom)){ citZ+=q===null?1:q; any=true; continue; }
+      if(/^jus/.test(nom)){ citJ+= ml!==null? Math.ceil(ml/40) : (q===null?1:q); any=true; continue; }
+      if(q===null){ any=true; continue; }
+      if(!u){ const w=nom.split(" ")[0]; add("u:"+w,q,ing.nom.split(" ")[0].replace(/s$/,"")+"s"); continue; }
+    }
+    if(q===null){ any=true; continue; }
+    if(/^(g|gr|gramme|grammes|kg)$/.test(u)) add("g",u==="kg"?q*1000:q,"g");
+    else if(ml!==null) add("ml",ml,"ml");
+    else if(!u) add("n",q,"");
+    else add("u:"+u.replace(/s$/,""),q,ing.unite);
+  }
+  if(citZ||citJ) add("n",Math.max(citZ,citJ),"");
+  const parts=[];
+  for(const [k,o] of Object.entries(fam)){
+    if(k.startsWith("txt:")){ parts.push(o.label); continue; }
+    if(k==="n") parts.push(String(Math.max(1,Math.ceil(o.v-1e-9))));
+    else if(k==="g") parts.push(fmtQty({quantite:o.v,unite:"g"},1));
+    else if(k==="ml") parts.push(fmtQty({quantite:o.v,unite:"ml"},1));
+    else { const lab=o.label; parts.push(fmtQty({quantite:o.v,unite:lab},1)); }
+  }
   return parts.length? "("+parts.join(" + ")+")" : "";
 }
 function resetAll(){
