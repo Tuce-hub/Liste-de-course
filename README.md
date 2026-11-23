@@ -12,6 +12,6 @@ Les données restent sur le téléphone (stockage du navigateur).
 
 ## Installation
 
-1. Ouvrir https://tuce-hub.github.io/liste-de-course/ dans Chrome (Android).
+1. Ouvrir https://tuce-hub.github.io/Liste-de-course/ dans Chrome (Android).
 2. Menu ⋮ → **Installer l'application**.
 3. « Hey Google, ouvre Liste de course ».
