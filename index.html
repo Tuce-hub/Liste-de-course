@@ -58,6 +58,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .status.err{background:var(--warn-soft);color:var(--warn)}
 .recipes{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .rchip{display:flex;align-items:center;gap:4px;background:var(--accent-soft);border-radius:999px;padding:4px 5px 4px 4px;font-size:13.5px}
+.rchip.done{background:var(--chip);color:var(--muted)}
 .rchip .rt{font-weight:600;padding:4px 6px 4px 8px}
 .rchip .mini{display:inline-flex;align-items:center;background:rgba(0,0,0,.07);border-radius:999px}
 .rchip .mini button{width:26px;height:26px;font-weight:700}
@@ -350,16 +351,31 @@ function carnetUpsert(r){
   S.carnet.sort((a,b)=>a.title.localeCompare(b.title,"fr"));
   return c;
 }
-function addRecipe(rec,covers){
-  const rid=uid();
-  const r=Object.assign(JSON.parse(JSON.stringify(rec)),{id:rid,covers});
-  S.recipes.push(r);
+function recipeUsed(rid){ return S.items.some(i=>i.contribs.some(c=>c.rid===rid)); }
+function attachRecipe(r){
   r.ings.forEach((ing,i)=>{
     const buy=ingBuy(ing);
     let it=findItem(buy);
     if(!it){ it=newItem(buy,(!isDerived(ing)&&RAYONS.includes(ing.rayon))?ing.rayon:guessRayon(buy),"recette",false); S.items.push(it); }
-    it.contribs.push({rid,i}); it.needed=true;
+    if(!it.contribs.some(c=>c.rid===r.id&&c.i===i)) it.contribs.push({rid:r.id,i});
+    it.needed=true;
   });
+}
+function redoRecipe(rid,covers){
+  const r=S.recipes.find(x=>x.id===rid); if(!r) return null;
+  if(covers) r.covers=covers;
+  attachRecipe(r); persist(); render(); return r;
+}
+function addOrRedo(rec,covers){ // évite les doublons : une recette déjà dans la liste est refaite
+  const ex=S.recipes.find(x=>norm(x.title)===norm(rec.title));
+  if(ex){ if(!recipeUsed(ex.id)) return {r:redoRecipe(ex.id,covers),redo:true}; ex.covers=covers; persist(); render(); return {r:ex,redo:false,already:true}; }
+  return {r:addRecipe(rec,covers),redo:false};
+}
+function addRecipe(rec,covers){
+  const rid=uid();
+  const r=Object.assign(JSON.parse(JSON.stringify(rec)),{id:rid,covers});
+  S.recipes.push(r);
+  attachRecipe(r);
   persist(); render(); return r;
 }
 function removeRecipe(rid){
@@ -411,21 +427,19 @@ function qtyText(it){
   return parts.length? "("+parts.join(" + ")+")" : "";
 }
 function settleCart(){ // retour du magasin : ce qui est dans le panier est soldé
-  let n=0;
+  let n=0; const wasUsed=S.recipes.filter(r=>recipeUsed(r.id)).map(r=>r.id);
   for(const it of S.items) if(it.needed&&it.inCart){ it.needed=false; it.manual=false; it.inCart=false; it.contribs=[]; if(it.source==="recette") it.source="perso"; n++; }
-  const used=new Set(); S.items.forEach(i=>i.contribs.forEach(c=>used.add(c.rid)));
-  const before=S.recipes.length; S.recipes=S.recipes.filter(r=>used.has(r.id));
-  return {n, done:before-S.recipes.length};
+  return {n, done:wasUsed.filter(id=>!recipeUsed(id)).length};
 }
 function leaveShop(finished){
   const {n,done}=settleCart(); S.mode="prep"; persist(); render(); window.scrollTo(0,0);
-  if(finished) toast("Courses terminées ✓"+(done?" · "+done+" recette"+(done>1?"s":"")+" soldée"+(done>1?"s":""):""));
-  else if(n) toast(n+" produit"+(n>1?"s":"")+" acheté"+(n>1?"s":"")+" retiré"+(n>1?"s":"")+" de la liste"+(done?" · "+done+" recette"+(done>1?"s":"")+" soldée"+(done>1?"s":""):"")+".");
+  if(finished) toast("Courses terminées ✓"+(done?" · "+done+" recette"+(done>1?"s":"")+" faite"+(done>1?"s":""):""));
+  else if(n) toast(n+" produit"+(n>1?"s":"")+" acheté"+(n>1?"s":"")+" retiré"+(n>1?"s":"")+" de la liste"+(done?" · "+done+" recette"+(done>1?"s":"")+" faite"+(done>1?"s":""):"")+".");
 }
 function resetAll(){
   S.items.forEach(i=>{ if(i.source==="recette") i.source="perso"; });
   S.items.forEach(i=>{i.needed=false;i.manual=false;i.inCart=false;i.contribs=[];});
-  S.recipes=[]; S.mode="prep"; persist(); render(); window.scrollTo(0,0);
+  S.mode="prep"; persist(); render(); window.scrollTo(0,0);
 }
 
 /* ---------- codes d'import / export ---------- */
@@ -557,7 +571,7 @@ function renameItem(it,v){
 }
 
 function confirmReset(){
-  sheet(`<p><b>Tout décocher ?</b><br>Toutes les cases sont remises à zéro et les recettes retirées de la liste (les produits restent, sans quantité). Elles restent dans ton carnet. Tes produits restent aussi.</p>
+  sheet(`<p><b>Tout décocher ?</b><br>Toutes les cases sont remises à zéro et les quantités effacées. Les recettes et les produits restent. Elles restent dans ton carnet. Tes produits restent aussi.</p>
     <div class="btns"><button data-close style="background:var(--chip)">Annuler</button><button id="mYes" style="background:var(--warn);color:#fff">Tout décocher</button></div>`, ev=>{
     if(ev.target.id==="mYes"){ closeSheet(); resetAll(); }
   });
@@ -601,7 +615,7 @@ function renderFiche(){
     </div>
   </div>`;
   $("barInner").innerHTML = active
-    ? `<button class="big sec" id="fClose2" style="flex:1">← Retour à la liste</button>`
+    ? (recipeUsed(r.id) ? `<button class="big sec" id="fClose2" style="flex:1">← Retour à la liste</button>` : `<button class="big sec" id="fClose2">←</button><button class="big" id="fRedo">🔁 Refaire (${r.covers} couverts)</button>`)
     : `<button class="big" id="fAdd">Ajouter à la liste (${r.covers} couverts)</button>`;
   el.hidden=false; document.body.style.overflow="hidden";
 }
@@ -676,7 +690,7 @@ function render(){
   if(!shop){
     $("sub").textContent = needed.length+" produit"+(needed.length>1?"s":"")+" à acheter";
     $("recipes").innerHTML = S.recipes.map(r=>
-      `<span class="rchip"><button class="rt" data-open="${r.id}">🍳 ${esc(r.title)}</button><span class="mini"><button data-cv="${r.id}" data-d="-1" aria-label="Moins">−</button><b>${r.covers}</b><button data-cv="${r.id}" data-d="1" aria-label="Plus">+</button></span><button class="x" data-rrm="${r.id}" aria-label="Retirer">✕</button></span>`).join("");
+      `<span class="rchip${recipeUsed(r.id)?"":" done"}"><button class="rt" data-open="${r.id}">${recipeUsed(r.id)?"🍳":"✓"} ${esc(r.title)}</button><span class="mini"><button data-cv="${r.id}" data-d="-1" aria-label="Moins">−</button><b>${r.covers}</b><button data-cv="${r.id}" data-d="1" aria-label="Plus">+</button></span><button class="x" data-rrm="${r.id}" aria-label="Retirer">✕</button></span>`).join("");
 
     if(addMode==="produit" && Q.qProd){
       const found=S.items.filter(i=>matches(i.name,Q.qProd));
@@ -757,7 +771,8 @@ document.addEventListener("click",e=>{
     return renderFiche();
   }
   if(t.id==="fClose"||t.id==="fClose2") return closeFiche();
-  if(t.id==="fAdd"){ const r=S.carnet[fiche.idx], c=fiche.covers; const added=addRecipe(r,c); fiche={rid:added.id}; renderFiche(); toast("« "+added.title+" » ("+c+" couverts) ajoutée à la liste."); return; }
+  if(t.id==="fAdd"){ const r=S.carnet[fiche.idx], c=fiche.covers; const res=addOrRedo(r,c); fiche={rid:res.r.id}; renderFiche(); toast("« "+res.r.title+" » ("+c+" couverts) "+(res.already?"déjà dans la liste.":(res.redo?"refaite : ingrédients recochés.":"ajoutée à la liste."))); return; }
+  if(t.id==="fRedo"){ const r=redoRecipe(fiche.rid); renderFiche(); toast("« "+r.title+" » : ingrédients recochés."); return; }
   if(t.id==="fRemove"){ const rid=fiche.rid; fiche=null; removeRecipe(rid); return closeFiche(); }
   if(t.id==="fForget"){ const r=S.carnet[fiche.idx]; S.carnet.splice(fiche.idx,1); persist(); closeFiche(); toast("« "+r.title+" » supprimée du carnet."); return; }
   if(t.id==="fCopy") return copyText(recipeText(ficheRecipe()),t,"📋 Copier la recette");
