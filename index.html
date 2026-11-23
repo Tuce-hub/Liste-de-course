@@ -261,7 +261,7 @@ function fmtQty(ing,factor){
   if(/^(ml|cl|l|litre|litres)$/.test(ul)){
     const ml = ul==="cl"? x*10 : (ul==="ml"? x : x*1000);
     if(ml>=1000) return fr(Math.round(ml/50)*50/1000)+" l";
-    if(ml>=100) return Math.round(ml/10)+" cl";
+    if(ml>=100||(ul==="cl"&&ml>=10)) return fr(Math.round(ml)/10)+" cl";
     return Math.max(1,Math.round(ml/5)*5)+" ml";
   }
   if(/c\.?\s*à|cuill|cas|cac|tasse|verre|bol/.test(ul)) return half(x)+" "+u;
@@ -271,6 +271,20 @@ function fmtQty(ing,factor){
 const ingLabel = (ing,f) => ({q:fmtQty(ing,f), name: ing.nom+(ing.precision?" ("+ing.precision+")":"")});
 
 /* ---------- produits ---------- */
+/* Produit à acheter pour un ingrédient : « jaunes d'œufs » → œufs, « zeste de citron » → citron, « gousses d'ail » → ail… */
+function buyName(name){
+  let s=String(name||"").replace(/\(.*?\)/g," ").replace(/,.*$/,"").replace(/\s+pour\s+.*$/i,"").replace(/\s+/g," ").trim();
+  let m=s.match(/^(?:jaunes?|blancs?)\s+d['’]\s*(.+)$/i);
+  if(m && /^(œ|oe)ufs?\b/i.test(m[1])) return "œufs";
+  m=s.match(/^(?:un\s+)?filets?\s+d['’]\s*(huile.*)$/i); if(m) return m[1];
+  m=s.match(/^(?:zestes?|jus)\s+(?:de\s+|d['’]\s*)(?:\d+\s+|½\s+)?(citrons?(?:\s+verts?)?|oranges?|limes?|pamplemousses?|clémentines?)\b/i); if(m) return m[1];
+  m=s.match(/^(?:gousses?|feuilles?|brins?|branches?|bouquets?|pinc[ée]es?|tiges?|quartiers?|rondelles?|tranches?|morceaux|d[ée]s|cuill[èe]res?(?:\s+à\s+(?:soupe|café))?|noisettes?|pointes?|zestes?)\s+(?:de\s+|d['’]\s*)(.+)$/i);
+  if(m && !/^brick/i.test(m[1])) return m[1];
+  return s;
+}
+const ingBuy = ing => (ing.achat&&String(ing.achat).trim()) || buyName(ing.nom);
+const isDerived = ing => _nk(ingBuy(ing)) !== _nk(ing.nom);
+const _nk = s => String(s||"").toLowerCase().replace(/œ/g,"oe").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/(s|x)\b/g,"").trim();
 /* Même produit malgré l'orthographe : accents, majuscules, pluriel, article, précisions (fin, moulu, doux…), petite faute de frappe */
 const QUALIFS = ["en poudre","en grain","en grains","du moulin","de table","de ble","extra vierge","vierge","extra","fin","fine","gros","grosse","moulu","moulue","noir","noire","doux","douce","frais","fraiche","entier","entiere","demi-ecreme","ecreme","epais","epaisse","bio","nature","melange","melange d'","assortiment"]
   .map(q=>singular(fold(q))).sort((a,b)=>b.length-a.length);
@@ -296,6 +310,7 @@ function findItem(name){ return S.items.find(i=>i.source!=="recette"&&sameProduc
 function mergeDuplicates(){ // fusionne les doublons déjà présents
   const out=[];
   for(const it of S.items){
+    if(it.source==="recette"){ const b=buyName(it.name); if(_nk(b)!==_nk(it.name)) it.name=cap(b); }
     const tw=out.find(o=>sameProduct(o.name,it.name));
     if(!tw){ out.push(it); continue; }
     if(tw.source==="recette"&&it.source!=="recette"){ tw.source=it.source; tw.name=it.name; tw.rayon=it.rayon; }
@@ -325,7 +340,7 @@ function undoDelete(){
 /* ---------- recettes ---------- */
 function cleanRecipe(r){
   return {title:String(r.title||r.titre||"Recette"), base:Math.max(1,parseInt(r.base||r.personnes,10)||4), prep:r.prep||r.preparation||"", cook:r.cook||r.cuisson||"", rest:r.rest||r.repos||"", diff:r.diff||r.difficulte||"", cost:r.cost||r.cout||"",
-    ings:(r.ings||r.ingredients||[]).filter(i=>i&&i.nom).map(i=>({nom:String(i.nom).trim(),quantite:(i.quantite===null||i.quantite===undefined||i.quantite==="")?null:Number(i.quantite),unite:i.unite||"",rayon:RAYONS.includes(i.rayon)?i.rayon:guessRayon(i.nom),precision:i.precision||""})),
+    ings:(r.ings||r.ingredients||[]).filter(i=>i&&i.nom).map(i=>({nom:String(i.nom).trim(),quantite:(i.quantite===null||i.quantite===undefined||i.quantite==="")?null:Number(i.quantite),unite:i.unite||"",rayon:RAYONS.includes(i.rayon)?i.rayon:guessRayon(i.nom),precision:i.precision||"",achat:i.achat||""})),
     steps:(r.steps||r.etapes||[]).map(String), tips:(r.tips||r.astuces||[]).map(String), query:r.query||""};
 }
 function carnetUpsert(r){
@@ -340,8 +355,9 @@ function addRecipe(rec,covers){
   const r=Object.assign(JSON.parse(JSON.stringify(rec)),{id:rid,covers});
   S.recipes.push(r);
   r.ings.forEach((ing,i)=>{
-    let it=findItem(ing.nom);
-    if(!it){ it=newItem(ing.nom,RAYONS.includes(ing.rayon)?ing.rayon:guessRayon(ing.nom),"recette",false); S.items.push(it); }
+    const buy=ingBuy(ing);
+    let it=findItem(buy);
+    if(!it){ it=newItem(buy,(!isDerived(ing)&&RAYONS.includes(ing.rayon))?ing.rayon:guessRayon(buy),"recette",false); S.items.push(it); }
     it.contribs.push({rid,i}); it.needed=true;
   });
   persist(); render(); return r;
@@ -361,7 +377,8 @@ function removeRecipe(rid){
 function qtyText(it){
   const parts=it.contribs.map(c=>{
     const r=S.recipes.find(x=>x.id===c.rid); if(!r||!r.ings[c.i]) return "";
-    return fmtQty(r.ings[c.i], r.covers/r.base);
+    const ing=r.ings[c.i], q=fmtQty(ing, r.covers/r.base);
+    return isDerived(ing) ? ((q?q+" ":"")+ing.nom) : q;
   }).filter(Boolean);
   return parts.length? "("+parts.join(" + ")+")" : "";
 }

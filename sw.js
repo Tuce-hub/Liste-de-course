@@ -1,5 +1,5 @@
 // Service worker : met l'appli en cache pour qu'elle s'ouvre sans réseau.
-const CACHE = "liste-de-course-v2";
+const CACHE = "liste-de-course-v3";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png"];
 
 self.addEventListener("install", e => {
