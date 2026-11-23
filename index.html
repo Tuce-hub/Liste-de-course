@@ -585,6 +585,12 @@ function confirmReset(){
 const activeInst = t => S.recipes.find(r=>norm(r.title)===norm(t)&&recipeUsed(r.id));
 const recipeData = t => S.carnet.find(r=>norm(r.title)===norm(t)) || S.recipes.find(r=>norm(r.title)===norm(t));
 const wasMade = t => { const d=recipeData(t); return !!(d&&d.made) || S.recipes.some(r=>norm(r.title)===norm(t)); };
+function buyRecipe(title,covers){
+  const data=recipeData(title); if(!data) return null;
+  let inst=S.recipes.find(r=>norm(r.title)===norm(title));
+  if(inst){ inst.covers=covers; attachRecipe(inst); } else inst=addRecipe(data,covers);
+  data.made=true; persist(); render(); return inst;
+}
 function quickAdd(title,covers){
   const data=recipeData(title); if(!data) return;
   const redo=wasMade(title); const res=addOrRedo(data,covers); data.made=true; persist(); render();
@@ -631,9 +637,7 @@ function renderFiche(){
       ${active?`<button class="warnl" id="fRemove">Retirer de la liste</button>`:""}<button class="warnl" id="fForget">🗑 Supprimer la recette</button>
     </div>
   </div>`;
-  $("barInner").innerHTML = active
-    ? `<button class="big sec" id="fClose2" style="flex:1">✓ Dans ta liste · ← Retour</button>`
-    : `<button class="big" id="fAdd">${wasMade(r.title)?"🔁 Refaire":"🛒 Ajouter à la liste"} (${r.covers} couverts)</button>`;
+  $("barInner").innerHTML = `<button class="big sec" id="fClose2">←</button><button class="big" id="fAdd">🛒 Acheter (${r.covers} couverts)</button>`;
   el.hidden=false; document.body.style.overflow="hidden";
 }
 function openFiche(spec){ fiche=spec; renderFiche(); $("fiche").scrollTop=0; }
@@ -720,7 +724,7 @@ function render(){
         h+=`<h2>Mes recettes (${tot})</h2>`;
         if(!tot) h+=`<div class="empty">Aucune recette pour l'instant.<br>Cherche-la sur la page Claude (🌐 Nouvelle), touche <b>📤 Envoyer vers l'appli</b>, puis <b>📥 Importer</b> ici.</div>`;
         else if(!RL.length) h+=`<div class="empty">Aucune recette ne correspond.</div>`;
-        else h+=`<div class="list">${RL.map((r,i)=>{ const a=activeInst(r.title); return `<div class="rrow"><button class="rmain" data-ridx="${i}"><span class="name"><b>${esc(r.title)}</b><span class="tag">${r.base} pers. · ${r.ings.length} ingrédients${r.prep?" · "+esc(r.prep):""}</span></span></button>${a?`<span class="ract on">✓ Dans la liste</span>`:`<button class="ract" data-qadd="${i}">${wasMade(r.title)?"🔁 Refaire":"🛒 Ajouter"}</button>`}</div>`; }).join("")}</div>`;
+        else h+=`<div class="list">${RL.map((r,i)=>{ const a=activeInst(r.title); return `<div class="rrow"><button class="rmain" data-ridx="${i}"><span class="name"><b>${esc(r.title)}</b><span class="tag">${r.base} pers. · ${r.ings.length} ingrédients${r.prep?" · "+esc(r.prep):""}</span></span></button><button class="ract" data-qadd="${i}">🛒 Acheter</button></div>`; }).join("")}</div>`;
       }else{
         h+=`<h2>Produits</h2>`;
         for(const [r,its] of groupByRayon(S.items)) h+=`<h3>${esc(r)}</h3><div class="list">${its.map(i=>rowHtml(i,"prep")).join("")}</div>`;
@@ -781,7 +785,7 @@ document.addEventListener("click",e=>{
   if(d.rrm) return removeRecipe(d.rrm);
   if(d.dcov){ S.covers=clampC(S.covers+ +d.dcov); persist(); render(); return; }
   if(d.cv){ const r=S.recipes.find(x=>x.id===d.cv); if(r){ r.covers=clampC(r.covers+ +d.d); persist(); render(); } return; }
-  if(d.qadd!==undefined){ const r=RL[+d.qadd]; if(r){ const x=quickAdd(r.title,S.covers); toast("« "+r.title+" » ("+S.covers+" couverts) "+(x.redo?"refaite":"ajoutée")+" : ingrédients cochés."); } return; }
+  if(d.qadd!==undefined){ const r=RL[+d.qadd]; if(r){ buyRecipe(r.title,S.covers); toast("« "+r.title+" » ("+S.covers+" couverts) : ingrédients ajoutés à la liste."); } return; }
   if(d.ridx!==undefined){ const r=RL[+d.ridx]; if(r) openFiche({title:r.title, covers:S.covers}); return; }
   if(d.fcv){
     const act=activeInst(fiche.title);
@@ -791,7 +795,7 @@ document.addEventListener("click",e=>{
   }
 
   if(t.id==="fClose"||t.id==="fClose2") return closeFiche();
-  if(t.id==="fAdd"){ const c=fiche.covers; const res=addOrRedo(recipeData(fiche.title),c); const dd=recipeData(fiche.title); if(dd){ dd.made=true; persist(); } renderFiche(); toast("« "+res.r.title+" » ("+c+" couverts) : ingrédients ajoutés à la liste."); return; }
+  if(t.id==="fAdd"){ const c=ficheRecipe().covers; buyRecipe(fiche.title,c); renderFiche(); toast("« "+fiche.title+" » ("+c+" couverts) : ingrédients ajoutés à la liste."); return; }
   if(t.id==="fRemove"){ const act=activeInst(fiche.title); if(act){ fiche.covers=act.covers; removeRecipe(act.id); } renderFiche(); toast("Ingrédients retirés de la liste."); return; }
   if(t.id==="fForget"){ const title=fiche.title;
     return sheet(`<p><b>Supprimer « ${esc(title)} » ?</b><br>La recette sera effacée définitivement.</p><div class="btns"><button data-close style="background:var(--chip)">Annuler</button><button id="mYesDel" style="background:var(--warn);color:#fff">Supprimer</button></div>`, ev=>{
