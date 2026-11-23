@@ -452,7 +452,7 @@ async function copyText(txt,btn,label){
 function sheet(html,handler){
   const m=$("modal"); $("sheet").innerHTML=html; m.hidden=false;
   m.onclick=async ev=>{
-    if(ev.target===m||ev.target.closest("[data-close]")){ m.hidden=true; return; }
+    if(ev.target===m||ev.target.closest("[data-close]")){ const ni=$("mName"), id=ni&&ni.dataset.item; m.hidden=true; if(id){ const it=S.items.find(i=>i.id===id); if(it) renameItem(it,ni.value); } return; }
     if(handler) await handler(ev);
   };
 }
@@ -523,15 +523,27 @@ function openVoice(){
 }
 function openItemSheet(id){
   const it=S.items.find(i=>i.id===id); if(!it) return;
-  sheet(`<h4>${esc(it.name)}</h4>${it.contribs.length?`<div class="tag">Utilisé par une recette de la liste.</div>`:""}
+  sheet(`<h4>Modifier le produit</h4>${it.contribs.length?`<div class="tag">Utilisé par une recette de la liste.</div>`:""}
+    <div class="lbl">Nom</div>
+    <div style="display:flex;gap:8px;margin-top:6px"><input id="mName" data-item="${it.id}" value="${esc(it.name)}" enterkeyhint="done" style="flex:1;min-width:0;height:44px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:0 12px;font:inherit"><button id="mRen" style="height:44px;padding:0 16px;border-radius:11px;background:var(--accent);color:#fff;font-weight:600">OK</button></div>
     <div class="lbl">Catégorie</div>
     <div class="catgrid">${RAYONS.map(r=>`<button class="cat${r===it.rayon?" on":""}" data-setcat="${esc(r)}">${esc(r)}</button>`).join("")}</div>
     <div class="btns"><button data-close style="background:var(--chip)">Fermer</button><button id="mDel" style="background:var(--warn);color:#fff">🗑 Supprimer</button></div>`, ev=>{
     const b=ev.target.closest("button"); if(!b) return;
-    if(b.dataset.setcat){ it.rayon=b.dataset.setcat; persist(); render(); closeSheet(); toast("« "+it.name+" » déplacé dans "+it.rayon+"."); }
+    if(b.id==="mRen"){ closeSheet(); renameItem(it,$("mName").value); return; }
+    if(b.dataset.setcat){ renameItem(it,$("mName").value); it.rayon=b.dataset.setcat; persist(); render(); closeSheet(); toast("« "+it.name+" » dans "+it.rayon+"."); }
     if(b.id==="mDel"){ closeSheet(); deleteItem(it.id); }
   });
+  const inp=$("mName"); inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); closeSheet(); renameItem(it,inp.value); } });
 }
+function renameItem(it,v){
+  v=String(v||"").trim(); if(!v||v===it.name) return false;
+  const n=S.items.length; it.name=cap(v);
+  const merged=mergeDuplicates(); persist(); render();
+  toast(merged&&S.items.length<n ? "Fusionné avec « "+(S.items.find(i=>sameProduct(i.name,v))||it).name+" »." : "Renommé en « "+it.name+" ».");
+  return true;
+}
+
 function confirmReset(){
   sheet(`<p><b>Tout décocher ?</b><br>Toutes les cases sont remises à zéro et les recettes retirées de la liste. Elles restent dans ton carnet. Tes produits restent aussi.</p>
     <div class="btns"><button data-close style="background:var(--chip)">Annuler</button><button id="mYes" style="background:var(--warn);color:#fff">Tout décocher</button></div>`, ev=>{
