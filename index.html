@@ -81,6 +81,7 @@ h3{font-size:14px;margin:14px 4px 4px;font-weight:600}
 .rrow{display:flex;align-items:center;gap:10px;padding:12px 8px 12px 14px;border-top:1px solid var(--line);width:100%;text-align:left}
 .rrow:first-child{border-top:0}
 .rrow .name b{display:block}
+.badge{display:inline-block;margin-top:4px;font-size:12px;font-weight:600;background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:2px 8px}
 .empty{padding:16px;color:var(--muted);font-size:14px;text-align:center;line-height:1.5}
 .bar{position:fixed;left:0;right:0;bottom:0;z-index:6;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
 .bar .inner{max-width:640px;margin:0 auto;display:flex;gap:8px}
@@ -242,7 +243,7 @@ let S=load();
 function persist(){ S.updated=Date.now(); try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){ toast("Mémoire pleine : impossible d'enregistrer."); } }
 if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{});
 
-let addMode="produit", addRayon="Autre", rayonTouched=false, lastDeleted=null, toastTimer=null, fiche=null;
+let RL=[], addMode="produit", addRayon="Autre", rayonTouched=false, lastDeleted=null, toastTimer=null, fiche=null;
 const Q={qProd:"",qRec:"",qShop:""};
 
 /* ---------- quantités ---------- */
@@ -519,7 +520,7 @@ function openOnline(){
       <li>Ouvre sa fiche, touche <b>📤 Envoyer vers l'appli</b> : le code est copié.</li>
       <li>Reviens ici : <b>📥 Importer</b> → <b>Coller</b> → <b>Importer</b>.</li>
     </ol>
-    <p>Elle reste ensuite dans ton carnet, utilisable hors ligne.</p>
+    <p>Elle reste ensuite dans l'onglet Recettes, utilisable hors ligne.</p>
     <div class="btns"><a href="${ONLINE_URL}" target="_blank" rel="noopener" style="flex:1;height:48px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;display:grid;place-content:center;text-decoration:none">Ouvrir la page Claude ↗</a></div>
     <div class="btns"><button data-close style="background:var(--chip)">Fermer</button></div>`);
 }
@@ -571,17 +572,24 @@ function renameItem(it,v){
 }
 
 function confirmReset(){
-  sheet(`<p><b>Tout décocher ?</b><br>Toutes les cases sont remises à zéro et les quantités effacées. Les recettes et les produits restent. Elles restent dans ton carnet. Tes produits restent aussi.</p>
+  sheet(`<p><b>Tout décocher ?</b><br>Toutes les cases sont remises à zéro et les quantités effacées. Les recettes et les produits restent.  Tes produits restent aussi.</p>
     <div class="btns"><button data-close style="background:var(--chip)">Annuler</button><button id="mYes" style="background:var(--warn);color:#fff">Tout décocher</button></div>`, ev=>{
     if(ev.target.id==="mYes"){ closeSheet(); resetAll(); }
   });
 }
 
 /* ---------- fiche recette ---------- */
+const activeInst = t => S.recipes.find(r=>norm(r.title)===norm(t)&&recipeUsed(r.id));
+const recipeData = t => S.carnet.find(r=>norm(r.title)===norm(t)) || S.recipes.find(r=>norm(r.title)===norm(t));
+function allRecipes(){
+  const out=[...S.carnet];
+  for(const r of S.recipes) if(!out.some(x=>norm(x.title)===norm(r.title))) out.push(r);
+  return out.sort((a,b)=>a.title.localeCompare(b.title,"fr"));
+}
 function ficheRecipe(){
   if(!fiche) return null;
-  if(fiche.rid) return S.recipes.find(r=>r.id===fiche.rid)||null;
-  const r=S.carnet[fiche.idx]; return r? Object.assign({},r,{covers:fiche.covers}) : null;
+  const act=activeInst(fiche.title); if(act) return act;
+  const r=recipeData(fiche.title); return r? Object.assign({},r,{covers:fiche.covers}) : null;
 }
 function recipeText(r){
   const f=r.covers/r.base;
@@ -596,7 +604,7 @@ function recipeText(r){
 function renderFiche(){
   const el=$("fiche"), r=ficheRecipe();
   if(!r){ closeFiche(); return; }
-  const f=r.covers/r.base, active=!!fiche.rid;
+  const f=r.covers/r.base, active=!!activeInst(r.title);
   const url="https://www.marmiton.org/recettes/recherche.aspx?aqt="+encodeURIComponent(r.query||r.title);
   const meta=[r.prep&&"⏱ Prép. "+r.prep, r.cook&&"🔥 Cuisson "+r.cook, r.rest&&"⏸ Repos "+r.rest, r.diff&&"📊 "+cap(r.diff), r.cost&&"💶 "+cap(r.cost)].filter(Boolean);
   el.innerHTML=`<div class="wrap">
@@ -611,12 +619,12 @@ function renderFiche(){
     <div class="flinks">
       <button id="fCopy">📋 Copier la recette</button>
       ${navigator.onLine?`<a href="${url}" target="_blank" rel="noopener">Voir sur Marmiton ↗</a>`:""}
-      ${active?`<button class="warnl" id="fRemove">Retirer de la liste</button>`:`<button class="warnl" id="fForget">Supprimer du carnet</button>`}
+      ${active?`<button class="warnl" id="fRemove">Retirer de la liste</button>`:""}<button class="warnl" id="fForget">🗑 Supprimer la recette</button>
     </div>
   </div>`;
   $("barInner").innerHTML = active
-    ? `<button class="big sec" id="fClose2">←</button><button class="big" id="fRedo">🔁 Refaire (${r.covers} couverts)</button>`
-    : `<button class="big" id="fAdd">${S.recipes.some(x=>norm(x.title)===norm(r.title))?"🔁 Refaire":"🛒 Ajouter à la liste"} (${r.covers} couverts)</button>`;
+    ? `<button class="big sec" id="fClose2" style="flex:1">✓ Dans ta liste · ← Retour</button>`
+    : `<button class="big" id="fAdd">🛒 Ajouter à la liste (${r.covers} couverts)</button>`;
   el.hidden=false; document.body.style.overflow="hidden";
 }
 function openFiche(spec){ fiche=spec; renderFiche(); $("fiche").scrollTop=0; }
@@ -689,8 +697,7 @@ function render(){
   let h="";
   if(!shop){
     $("sub").textContent = needed.length+" produit"+(needed.length>1?"s":"")+" à acheter";
-    $("recipes").innerHTML = S.recipes.map(r=>
-      `<span class="rchip${recipeUsed(r.id)?"":" done"}"><button class="rt" data-open="${r.id}">${recipeUsed(r.id)?"🍳":"✓"} ${esc(r.title)}</button><span class="mini"><button data-cv="${r.id}" data-d="-1" aria-label="Moins">−</button><b>${r.covers}</b><button data-cv="${r.id}" data-d="1" aria-label="Plus">+</button></span><button class="x" data-rrm="${r.id}" aria-label="Retirer">✕</button></span>`).join("");
+    $("recipes").innerHTML="";
 
     if(addMode==="produit" && Q.qProd){
       const found=S.items.filter(i=>matches(i.name,Q.qProd));
@@ -699,14 +706,16 @@ function render(){
       h+= found.length? `<h2>${found.length} résultat${found.length>1?"s":""}</h2><div class="list">${found.map(i=>rowHtml(i,"prep",true)).join("")}</div>` : `<div class="empty">Aucun produit ne correspond.</div>`;
     }else{
       if(addMode==="recette"){
-        const list=S.carnet.map((r,i)=>[r,i]).filter(([r])=>!Q.qRec||matches(r.title,Q.qRec)||r.ings.some(g=>matches(g.nom,Q.qRec)));
-        h+=`<h2>Mon carnet (${S.carnet.length})</h2>`;
-        if(!S.carnet.length) h+=`<div class="empty">Ton carnet est vide.<br>Cherche une recette sur la page Claude, puis <b>📤 Envoyer vers l'appli</b> et <b>📥 Importer</b> ici.</div>`;
-        else if(!list.length) h+=`<div class="empty">Aucune recette ne correspond.</div>`;
-        else h+=`<div class="list">${list.map(([r,i])=>`<button class="rrow" data-carnet="${i}"><span class="name"><b>${esc(r.title)}</b><span class="tag">${r.base} pers. · ${r.ings.length} ingrédients${r.prep?" · "+esc(r.prep):""}</span></span><span>›</span></button>`).join("")}</div>`;
+        RL=allRecipes().filter(r=>!Q.qRec||matches(r.title,Q.qRec)||r.ings.some(g=>matches(g.nom,Q.qRec)));
+        const tot=allRecipes().length;
+        h+=`<h2>Mes recettes (${tot})</h2>`;
+        if(!tot) h+=`<div class="empty">Aucune recette pour l'instant.<br>Cherche-la sur la page Claude (🌐 Nouvelle), touche <b>📤 Envoyer vers l'appli</b>, puis <b>📥 Importer</b> ici.</div>`;
+        else if(!RL.length) h+=`<div class="empty">Aucune recette ne correspond.</div>`;
+        else h+=`<div class="list">${RL.map((r,i)=>{ const a=activeInst(r.title); return `<button class="rrow" data-ridx="${i}"><span class="name"><b>${esc(r.title)}</b><span class="tag">${r.base} pers. · ${r.ings.length} ingrédients${r.prep?" · "+esc(r.prep):""}</span>${a?`<span class="badge">🛒 à acheter · ${a.covers} couverts</span>`:""}</span><span>›</span></button>`; }).join("")}</div>`;
+      }else{
+        h+=`<h2>Produits</h2>`;
+        for(const [r,its] of groupByRayon(S.items)) h+=`<h3>${esc(r)}</h3><div class="list">${its.map(i=>rowHtml(i,"prep")).join("")}</div>`;
       }
-      h+=`<h2>Produits</h2>`;
-      for(const [r,its] of groupByRayon(S.items)) h+=`<h3>${esc(r)}</h3><div class="list">${its.map(i=>rowHtml(i,"prep")).join("")}</div>`;
     }
     $("barInner").innerHTML = `<button class="big sec" id="share" ${needed.length?"":"disabled"} aria-label="Partager la liste">📤</button><button class="big" id="validate" ${needed.length?"":"disabled"}>Valider la liste (${needed.length})</button>`;
   }else{
@@ -763,18 +772,23 @@ document.addEventListener("click",e=>{
   if(d.rrm) return removeRecipe(d.rrm);
   if(d.dcov){ S.covers=clampC(S.covers+ +d.dcov); persist(); render(); return; }
   if(d.cv){ const r=S.recipes.find(x=>x.id===d.cv); if(r){ r.covers=clampC(r.covers+ +d.d); persist(); render(); } return; }
-  if(d.open) return openFiche({rid:d.open});
-  if(d.carnet!==undefined) return openFiche({idx:+d.carnet, covers:S.covers});
+  if(d.ridx!==undefined){ const r=RL[+d.ridx]; if(r) openFiche({title:r.title, covers:S.covers}); return; }
   if(d.fcv){
-    if(fiche.rid){ const r=S.recipes.find(x=>x.id===fiche.rid); r.covers=clampC(r.covers+ +d.fcv); persist(); }
+    const act=activeInst(fiche.title);
+    if(act){ act.covers=clampC(act.covers+ +d.fcv); persist(); }
     else fiche.covers=clampC(fiche.covers+ +d.fcv);
     return renderFiche();
   }
+
   if(t.id==="fClose"||t.id==="fClose2") return closeFiche();
-  if(t.id==="fAdd"){ const r=S.carnet[fiche.idx], c=fiche.covers; const res=addOrRedo(r,c); fiche={rid:res.r.id}; renderFiche(); toast("« "+res.r.title+" » ("+c+" couverts) "+(res.already?"déjà dans la liste.":(res.redo?"refaite : ingrédients recochés.":"ajoutée à la liste."))); return; }
-  if(t.id==="fRedo"){ const r=redoRecipe(fiche.rid); renderFiche(); toast("« "+r.title+" » : ingrédients recochés."); return; }
-  if(t.id==="fRemove"){ const rid=fiche.rid; fiche=null; removeRecipe(rid); return closeFiche(); }
-  if(t.id==="fForget"){ const r=S.carnet[fiche.idx]; S.carnet.splice(fiche.idx,1); persist(); closeFiche(); toast("« "+r.title+" » supprimée du carnet."); return; }
+  if(t.id==="fAdd"){ const c=fiche.covers; const res=addOrRedo(recipeData(fiche.title),c); renderFiche(); toast("« "+res.r.title+" » ("+c+" couverts) : ingrédients ajoutés à la liste."); return; }
+  if(t.id==="fRemove"){ const act=activeInst(fiche.title); if(act){ fiche.covers=act.covers; removeRecipe(act.id); } renderFiche(); toast("Ingrédients retirés de la liste."); return; }
+  if(t.id==="fForget"){ const title=fiche.title;
+    return sheet(`<p><b>Supprimer « ${esc(title)} » ?</b><br>La recette sera effacée définitivement.</p><div class="btns"><button data-close style="background:var(--chip)">Annuler</button><button id="mYesDel" style="background:var(--warn);color:#fff">Supprimer</button></div>`, ev=>{
+      if(ev.target.id!=="mYesDel") return;
+      closeSheet(); S.recipes.filter(r=>norm(r.title)===norm(title)).forEach(r=>removeRecipe(r.id));
+      S.carnet=S.carnet.filter(r=>norm(r.title)!==norm(title)); persist(); closeFiche(); toast("« "+title+" » supprimée.");
+    }); }
   if(t.id==="fCopy") return copyText(recipeText(ficheRecipe()),t,"📋 Copier la recette");
   if(t.id==="share") return shareList(t);
   if(t.id==="validate"){ S.mode="shop"; Q.qShop=""; $("qShop").value=""; persist(); render(); window.scrollTo(0,0); return; }
