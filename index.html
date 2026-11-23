@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liste de course</title>
+<meta name="theme-color" content="#2f6b4f">
+<meta name="description" content="Liste de courses à cocher, recettes et mode magasin, utilisable hors ligne.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bg:#f6f2ea; --card:#fffdf8; --ink:#23201b; --muted:#857d70; --line:#e6dfd2;
+  --accent:#2f6b4f; --accent-soft:#dcebe2; --warn:#b4472f; --warn-soft:#f6e1da; --chip:#efe8da;
+  --serif: "Iowan Old Style","Palatino Linotype",Georgia,serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#191815; --card:#22211d; --ink:#f0ebe1; --muted:#a39b8d; --line:#36332c;
+    --accent:#6fbf93; --accent-soft:#25382d; --warn:#e08a74; --warn-soft:#3a2620; --chip:#2d2b25; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(96px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+.wrap{max-width:640px;margin:0 auto;padding:0 14px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 0 10px;border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:8px}
+h1{font-family:var(--serif);font-size:26px;margin:0;flex:1;letter-spacing:-.3px;font-weight:700}
+.sub{color:var(--muted);font-size:13px;margin-top:2px}
+.off{display:inline-block;background:var(--warn-soft);color:var(--warn);border-radius:6px;padding:0 6px;margin-left:6px;font-size:12px;font-weight:600}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.ibtn{height:38px;padding:0 12px;border-radius:10px;background:var(--chip);font-size:14px;font-weight:500;white-space:nowrap}
+.ibtn.danger{background:var(--warn-soft);color:var(--warn)}
+.ibtn.on{background:var(--accent);color:#fff}
+.seg{display:flex;background:var(--chip);border-radius:12px;padding:3px;margin-top:12px}
+.seg button{flex:1;height:36px;border-radius:9px;font-weight:600;font-size:14.5px;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.search{display:flex;gap:6px;margin-top:10px}
+.field{flex:1;min-width:0;position:relative}
+.field input{width:100%;height:46px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:0 40px 0 38px;font:inherit}
+.field::before{content:"🔍";position:absolute;left:12px;top:13px;font-size:15px;opacity:.6;pointer-events:none}
+.field .clr{position:absolute;right:6px;top:7px;width:32px;height:32px;border-radius:50%;background:var(--chip);font-size:13px}
+.go{height:46px;min-width:46px;padding:0 14px;border-radius:12px;background:var(--accent);color:#fff;font-weight:700;font-size:18px}
+.mic{height:46px;width:46px;border-radius:12px;background:var(--chip);font-size:20px;flex:none}
+.mic.live{background:var(--warn);color:#fff;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.65}}
+.cats{display:flex;gap:6px;overflow-x:auto;margin-top:8px;padding-bottom:2px;scrollbar-width:none}
+.cats::-webkit-scrollbar{display:none}
+.cat{flex:none;font-size:13px;padding:6px 11px;border-radius:999px;background:var(--card);border:1px solid var(--line)}
+.cat.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.catgrid{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 18px}
+.tools{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center}
+.covers{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.stepper{display:inline-flex;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stepper button{width:36px;height:34px;font-size:18px;font-weight:600}
+.stepper b{min-width:28px;text-align:center;color:var(--ink)}
+.status{font-size:13.5px;margin-top:8px;padding:8px 12px;border-radius:10px;background:var(--accent-soft)}
+.status.err{background:var(--warn-soft);color:var(--warn)}
+.recipes{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rchip{display:flex;align-items:center;gap:4px;background:var(--accent-soft);border-radius:999px;padding:4px 5px 4px 4px;font-size:13.5px}
+.rchip .rt{font-weight:600;padding:4px 6px 4px 8px}
+.rchip .mini{display:inline-flex;align-items:center;background:rgba(0,0,0,.07);border-radius:999px}
+.rchip .mini button{width:26px;height:26px;font-weight:700}
+.rchip .mini b{min-width:16px;text-align:center;font-size:13px}
+.rchip .x{width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.08);font-size:12px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:22px 4px 6px;font-weight:600}
+h3{font-size:14px;margin:14px 4px 4px;font-weight:600}
+.list{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.row{display:flex;align-items:center;gap:10px;padding:0 6px 0 12px;min-height:50px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row label{display:flex;align-items:center;gap:12px;flex:1;min-height:50px;cursor:pointer}
+.row input[type=checkbox]{appearance:none;-webkit-appearance:none;width:24px;height:24px;flex:none;border-radius:7px;border:2px solid var(--muted);display:grid;place-content:center;margin:0}
+.row input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+.row input[type=checkbox]:checked::after{content:"";width:6px;height:11px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.name{flex:1}
+.qty,.tag{color:var(--muted);font-size:13px}
+.row.done .name{text-decoration:line-through;color:var(--muted)}
+.more{width:36px;height:36px;border-radius:9px;color:var(--muted);font-size:20px;flex:none}
+.addrow{width:100%;text-align:left;padding:14px;font-weight:600;color:var(--accent);background:var(--card);border:1px dashed var(--accent);border-radius:14px;margin-top:10px}
+.rrow{display:flex;align-items:center;gap:10px;padding:12px 8px 12px 14px;border-top:1px solid var(--line);width:100%;text-align:left}
+.rrow:first-child{border-top:0}
+.rrow .name b{display:block}
+.empty{padding:16px;color:var(--muted);font-size:14px;text-align:center;line-height:1.5}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
+.bar .inner{max-width:640px;margin:0 auto;display:flex;gap:8px}
+.big{flex:1;height:54px;border-radius:14px;background:var(--accent);color:#fff;font-weight:600;font-size:17px;box-shadow:0 6px 18px rgba(0,0,0,.15)}
+.big:disabled{opacity:.5}
+.big.sec{flex:none;padding:0 16px;background:var(--card);color:var(--ink);border:1px solid var(--line);box-shadow:none}
+.progress{height:6px;border-radius:3px;background:var(--line);margin-top:10px;overflow:hidden}
+.progress div{height:100%;background:var(--accent);transition:width .25s}
+.modal{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:640px;max-height:88vh;overflow-y:auto;border-radius:18px 18px 0 0;padding:20px 18px calc(18px + env(safe-area-inset-bottom))}
+.sheet h4{margin:0 0 6px;font-size:18px}
+.sheet p{margin:0 0 14px;font-size:15px}
+.sheet .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:12px}
+.sheet .btns{display:flex;gap:8px;margin-top:10px}
+.sheet .btns button{flex:1;height:48px;border-radius:12px;font-weight:600}
+.menu button{display:flex;width:100%;align-items:center;gap:12px;padding:14px 6px;border-top:1px solid var(--line);font-size:15.5px;text-align:left}
+.menu button:first-child{border-top:0}
+.menu small{display:block;color:var(--muted);font-size:12.5px}
+textarea{width:100%;min-height:120px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:10px;font:13px/1.4 ui-monospace,monospace}
+.steps-vo{padding-left:20px;margin:8px 0 14px;font-size:14.5px;line-height:1.5}
+.steps-vo li{margin:6px 0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:11;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 10px 10px 16px;display:flex;align-items:center;gap:12px;font-size:14px;max-width:92vw;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast button{color:var(--accent-soft);font-weight:700;padding:6px 8px}
+/* fiche recette */
+.fiche{position:fixed;inset:0;z-index:9;background:var(--bg);overflow-y:auto;padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(90px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+.fiche .wrap{padding-top:14px}
+.fhead{display:flex;align-items:flex-start;gap:10px}
+.fhead h1{font-size:28px;line-height:1.15}
+.close{width:40px;height:40px;border-radius:50%;background:var(--chip);font-size:18px;flex:none}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.meta span{font-size:13px;background:var(--chip);border-radius:8px;padding:5px 10px}
+.fcov{display:flex;align-items:center;gap:10px;margin:6px 0 4px;font-weight:500}
+.ings{list-style:none;padding:0;margin:0;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.ings li{padding:11px 14px;border-top:1px solid var(--line)}
+.ings li:first-child{border-top:0}
+.ings b{display:inline-block;min-width:74px}
+.steps{padding:0;margin:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;position:relative;padding:12px 0 12px 44px;border-top:1px solid var(--line);line-height:1.5}
+.steps li:first-child{border-top:0}
+.steps li::before{content:counter(s);position:absolute;left:0;top:10px;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:grid;place-content:center;font-size:14px}
+.tips{background:var(--accent-soft);border-radius:14px;padding:12px 14px 12px 32px;margin:0}
+.tips li{margin:4px 0}
+.flinks{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.flinks a,.flinks button{font-size:14px;padding:9px 14px;border-radius:10px;background:var(--chip);color:var(--ink);text-decoration:none;font-weight:500}
+.flinks .warnl{background:var(--warn-soft);color:var(--warn)}
+.note{font-size:12px;color:var(--muted);margin-top:16px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top">
+      <h1 id="title">Liste de course</h1>
+      <button class="ibtn" id="menuBtn" aria-label="Menu">☰</button>
+      <button class="ibtn danger" id="resetBtn">Tout décocher</button>
+    </div>
+    <div class="sub"><span id="sub"></span><span class="off" id="offBadge" hidden>hors ligne</span></div>
+
+    <div id="prepHead">
+      <div class="seg"><button id="segP" class="on">＋ Produits</button><button id="segR">🍳 Recettes</button></div>
+
+      <div id="prodPanel">
+        <form class="search" id="addForm" autocomplete="off">
+          <div class="field"><input id="qProd" type="search" placeholder="Chercher ou ajouter un produit" enterkeyhint="done"><button type="button" class="clr" data-clear="qProd" hidden aria-label="Effacer">✕</button></div>
+          <button class="mic" id="micBtn" type="button" hidden aria-label="Dicter">🎤</button>
+          <button class="go" type="submit" aria-label="Ajouter">＋</button>
+        </form>
+        <div class="cats" id="cats" hidden></div>
+      </div>
+
+      <div id="recPanel" hidden>
+        <div class="search">
+          <div class="field"><input id="qRec" type="search" placeholder="Chercher dans mes recettes" enterkeyhint="search"><button type="button" class="clr" data-clear="qRec" hidden aria-label="Effacer">✕</button></div>
+        </div>
+        <div class="tools">
+          <div class="covers">Couverts <span class="stepper"><button type="button" data-dcov="-1">−</button><b id="covVal">4</b><button type="button" data-dcov="1">+</button></span></div>
+          <span style="flex:1"></span>
+          <button class="ibtn" id="importBtn">📥 Importer</button>
+          <button class="ibtn" id="onlineBtn">🌐 Nouvelle</button>
+        </div>
+      </div>
+      <div class="status" id="status" hidden></div>
+      <div class="recipes" id="recipes"></div>
+    </div>
+
+    <div id="shopHead" hidden>
+      <div class="search">
+        <div class="field"><input id="qShop" type="search" placeholder="Chercher dans la liste" enterkeyhint="search"><button type="button" class="clr" data-clear="qShop" hidden aria-label="Effacer">✕</button></div>
+      </div>
+      <div class="progress"><div id="prog"></div></div>
+    </div>
+  </header>
+
+  <main id="main"></main>
+</div>
+
+<div class="bar"><div class="inner" id="barInner"></div></div>
+<div class="fiche" id="fiche" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<div class="modal" id="modal" hidden><div class="sheet" id="sheet"></div></div>
+
+<script>
+"use strict";
+const ONLINE_URL = "https://claude.ai/artifact/AjMT52q5hu7gsyJvNnKCii";
+const RAYONS = ["Fruits & légumes","Boulangerie","Boucherie & poisson","Frais","Épicerie","Surgelés","Boissons","Hygiène","Entretien","Autre"];
+const BASE = {
+  "Fruits & légumes":["Pommes de terre","Oignons","Ail","Tomates","Carottes","Salade","Bananes","Pommes","Citrons"],
+  "Boulangerie":["Pain"],
+  "Frais":["Lait","Beurre","Œufs","Yaourts","Fromage râpé","Crème fraîche","Jambon"],
+  "Épicerie":["Pâtes","Riz","Farine","Sucre","Sel","Poivre","Huile d'olive","Vinaigre","Moutarde","Café","Thé","Céréales","Tomates concassées"],
+  "Boissons":["Eau","Jus de fruits"],
+  "Surgelés":["Légumes surgelés"],
+  "Hygiène":["Papier toilette","Dentifrice","Gel douche","Shampoing"],
+  "Entretien":["Liquide vaisselle","Lessive","Éponges","Sacs poubelle","Essuie-tout"]
+};
+const GUESS = {
+  "Fruits & légumes":"pomme de terre,patate,pomme,poire,banane,orange,citron,clementine,mandarine,kiwi,fraise,framboise,myrtille,raisin,melon,pasteque,peche,nectarine,abricot,cerise,prune,ananas,mangue,avocat,tomate,carotte,oignon,ail,echalote,poireau,courgette,aubergine,poivron,concombre,salade,laitue,mache,roquette,epinard,chou,chou-fleur,brocoli,haricot vert,champignon,navet,radis,celeri,persil,coriandre,basilic,ciboulette,menthe,thym,romarin,fenouil,betterave,potiron,potimarron,courge,endive,artichaut,asperge,gingembre,legume,fruit,herbe",
+  "Boulangerie":"pain,baguette,croissant,pain au chocolat,brioche,viennoiserie,pain de mie,biscotte,galette des rois",
+  "Boucherie & poisson":"boeuf,steak,steak hache,viande,viande hachee,poulet,blanc de poulet,dinde,porc,veau,agneau,canard,saucisse,merguez,chipolata,escalope,cote,roti,filet mignon,poisson,saumon,cabillaud,colin,truite,crevette,moule,gambas,lieu,dorade,bar,crabe,huitre",
+  "Frais":"lait,beurre,oeuf,yaourt,fromage,fromage blanc,emmental,gruyere,comte,mozzarella,parmesan,chevre,camembert,brie,raclette,creme,creme fraiche,jambon,saucisson,chorizo,lardon,bacon,pate brisee,pate feuilletee,pate sablee,pate a pizza,margarine,surimi,tofu,houmous,skyr,petit suisse,dessert lacte,quiche",
+  "Épicerie":"pate,spaghetti,tagliatelle,penne,coquillette,riz,farine,sucre,sel,poivre,huile,huile d'olive,vinaigre,moutarde,cafe,the,tisane,cereale,conserve,sauce,sauce tomate,ketchup,mayonnaise,biscuit,chocolat,confiture,miel,levure,epice,bouillon,lentille,pois chiche,semoule,quinoa,couscous,thon,sardine,mais,olive,cornichon,chip,gateau,compote,lait de coco,noix,amande,noisette,vanille,cacao,bonbon,tomate concassee,concentre de tomate,puree,fecule,maizena,chapelure,croquette",
+  "Surgelés":"surgele,glace,frite,pizza,poisson pane,sorbet,legume surgele,cordon bleu,nugget",
+  "Boissons":"eau,eau gazeuse,jus,jus de fruit,soda,coca,biere,vin,sirop,limonade,champagne,cidre,ice tea,lait d'avoine",
+  "Hygiène":"papier toilette,dentifrice,brosse a dent,gel douche,savon,shampoing,apres-shampoing,deodorant,rasoir,mousse a raser,coton,coton-tige,mouchoir,couche,serviette hygienique,tampon,creme hydratante,lingette",
+  "Entretien":"liquide vaisselle,lessive,eponge,sac poubelle,essuie-tout,sopalin,javel,nettoyant,adoucissant,pastille lave-vaisselle,tablette lave-vaisselle,sel lave-vaisselle,film alimentaire,papier aluminium,papier cuisson,ampoule,pile,allumette"
+};
+
+/* ---------- utilitaires ---------- */
+const uid = () => Math.random().toString(36).slice(2,10);
+const fold = s => (s||"").toLowerCase().replace(/œ/g,"oe").replace(/æ/g,"ae").normalize("NFD").replace(/[̀-ͯ]/g,"");
+const singular = s => s.split(/\s+/).map(w=>w.replace(/(s|x)$/,"")).join(" ");
+const norm = s => singular(fold(s).replace(/^(des|du|de la|de l'|de|la|le|les|l')\s+/,"").trim());
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const cap = s => s ? s.charAt(0).toUpperCase()+s.slice(1) : s;
+const $ = id => document.getElementById(id);
+const clampC = n => Math.min(50,Math.max(1,n));
+
+const GUESS_LIST = Object.entries(GUESS).flatMap(([r,w])=>w.split(",").map(p=>[singular(fold(p.trim())),r])).sort((a,b)=>b[0].length-a[0].length);
+function guessRayon(name){
+  const n=" "+singular(fold(name))+" ";
+  for(const [p,r] of GUESS_LIST) if(n.includes(" "+p+" ")) return r;
+  return "Autre";
+}
+
+/* ---------- état (stocké sur le téléphone) ---------- */
+const KEY="liste-de-course";
+function defaultState(){
+  const items=[];
+  for(const r in BASE) for(const n of BASE[r]) items.push(newItem(n,r,"base",false));
+  return {v:3,mode:"prep",covers:4,items,recipes:[],carnet:[],updated:Date.now()};
+}
+function newItem(name,rayon,source,needed){ return {id:uid(),name:cap(name),rayon,source,needed:!!needed,manual:!!needed,inCart:false,contribs:[]}; }
+function load(){
+  try{ const s=JSON.parse(localStorage.getItem(KEY)); if(s&&s.items){ s.carnet=s.carnet||[]; s.recipes=s.recipes||[]; s.covers=s.covers||4; return s; } }catch(e){}
+  return defaultState();
+}
+let S=load();
+function persist(){ S.updated=Date.now(); try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){ toast("Mémoire pleine : impossible d'enregistrer."); } }
+if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+
+let addMode="produit", addRayon="Autre", rayonTouched=false, lastDeleted=null, toastTimer=null, fiche=null;
+const Q={qProd:"",qRec:"",qShop:""};
+
+/* ---------- quantités ---------- */
+const fr = n => String(Math.round(n*100)/100).replace(".",",");
+function half(x){ const r=Math.max(.5,Math.round(x*2)/2), i=Math.floor(r); return r-i ? (i? i+"½" : "½") : String(i); }
+function fmtQty(ing,factor){
+  const q=ing.quantite, u=(ing.unite||"").trim();
+  if(q===null||q===undefined||q===""||isNaN(Number(q))) return u;
+  let x=Number(q)*factor;
+  const ul=u.toLowerCase().replace(/\.$/,"");
+  if(!u) return Number.isInteger(Number(q)) ? String(Math.max(1,Math.round(x))) : half(x);
+  if(/^(g|gr|gramme|grammes|kg)$/.test(ul)){
+    if(ul==="kg") x*=1000;
+    if(x>=1000) return fr(Math.round(x/50)*50/1000)+" kg";
+    return (x>=20?Math.round(x/5)*5:Math.max(1,Math.round(x)))+" g";
+  }
+  if(/^(ml|cl|l|litre|litres)$/.test(ul)){
+    const ml = ul==="cl"? x*10 : (ul==="ml"? x : x*1000);
+    if(ml>=1000) return fr(Math.round(ml/50)*50/1000)+" l";
+    if(ml>=100) return Math.round(ml/10)+" cl";
+    return Math.max(1,Math.round(ml/5)*5)+" ml";
+  }
+  if(/c\.?\s*à|cuill|cas|cac|tasse|verre|bol/.test(ul)) return half(x)+" "+u;
+  if(/pinc|brin|feuille|gousse|tranche|botte|sachet|boîte|boite|pot|branche|filet|zeste|noix|noisette/.test(ul)) return (x<3?half(x):Math.round(x))+" "+u;
+  return (x<10?half(x):Math.round(x))+" "+u;
+}
+const ingLabel = (ing,f) => ({q:fmtQty(ing,f), name: ing.nom+(ing.precision?" ("+ing.precision+")":"")});
+
+/* ---------- produits ---------- */
+function findItem(name){ const n=norm(name); return S.items.find(i=>i.source!=="recette"&&norm(i.name)===n) || S.items.find(i=>i.source==="recette"&&norm(i.name)===n); }
+function addProduct(){
+  const inp=$("qProd"); const n=inp.value.trim(); if(!n) return;
+  const ex=findItem(n);
+  if(ex){ ex.needed=true; ex.manual=true; toast("« "+ex.name+" » coché."); }
+  else{ S.items.push(newItem(n,addRayon,"perso",true)); toast("« "+cap(n)+" » ajouté dans "+addRayon+"."); }
+  inp.value=""; Q.qProd=""; addRayon="Autre"; rayonTouched=false;
+  persist(); render(); inp.focus();
+}
+function deleteItem(id){
+  const idx=S.items.findIndex(i=>i.id===id); if(idx<0) return;
+  const [it]=S.items.splice(idx,1); lastDeleted={it,idx};
+  persist(); render(); toast("« "+it.name+" » supprimé.",true);
+}
+function undoDelete(){
+  if(!lastDeleted) return;
+  S.items.splice(Math.min(lastDeleted.idx,S.items.length),0,lastDeleted.it);
+  lastDeleted=null; persist(); render(); hideToast();
+}
+
+/* ---------- recettes ---------- */
+function cleanRecipe(r){
+  return {title:String(r.title||r.titre||"Recette"), base:Math.max(1,parseInt(r.base||r.personnes,10)||4), prep:r.prep||r.preparation||"", cook:r.cook||r.cuisson||"", rest:r.rest||r.repos||"", diff:r.diff||r.difficulte||"", cost:r.cost||r.cout||"",
+    ings:(r.ings||r.ingredients||[]).filter(i=>i&&i.nom).map(i=>({nom:String(i.nom).trim(),quantite:(i.quantite===null||i.quantite===undefined||i.quantite==="")?null:Number(i.quantite),unite:i.unite||"",rayon:RAYONS.includes(i.rayon)?i.rayon:guessRayon(i.nom),precision:i.precision||""})),
+    steps:(r.steps||r.etapes||[]).map(String), tips:(r.tips||r.astuces||[]).map(String), query:r.query||""};
+}
+function carnetUpsert(r){
+  const c=cleanRecipe(r);
+  const i=S.carnet.findIndex(x=>norm(x.title)===norm(c.title));
+  if(i>=0) S.carnet[i]=c; else S.carnet.push(c);
+  S.carnet.sort((a,b)=>a.title.localeCompare(b.title,"fr"));
+  return c;
+}
+function addRecipe(rec,covers){
+  const rid=uid();
+  const r=Object.assign(JSON.parse(JSON.stringify(rec)),{id:rid,covers});
+  S.recipes.push(r);
+  r.ings.forEach((ing,i)=>{
+    let it=findItem(ing.nom);
+    if(!it){ it=newItem(ing.nom,ing.rayon,"recette",false); S.items.push(it); }
+    it.contribs.push({rid,i}); it.needed=true;
+  });
+  persist(); render(); return r;
+}
+function removeRecipe(rid){
+  S.recipes=S.recipes.filter(r=>r.id!==rid);
+  S.items=S.items.filter(it=>{
+    if(!it.contribs.length) return true;
+    it.contribs=it.contribs.filter(c=>c.rid!==rid);
+    if(it.contribs.length) return true;
+    if(it.source==="recette") return false;
+    if(!it.manual){ it.needed=false; it.inCart=false; }
+    return true;
+  });
+  persist(); render();
+}
+function qtyText(it){
+  const parts=it.contribs.map(c=>{
+    const r=S.recipes.find(x=>x.id===c.rid); if(!r||!r.ings[c.i]) return "";
+    return fmtQty(r.ings[c.i], r.covers/r.base);
+  }).filter(Boolean);
+  return parts.length? "("+parts.join(" + ")+")" : "";
+}
+function resetAll(){
+  S.items=S.items.filter(i=>i.source!=="recette");
+  S.items.forEach(i=>{i.needed=false;i.manual=false;i.inCart=false;i.contribs=[];});
+  S.recipes=[]; S.mode="prep"; persist(); render(); window.scrollTo(0,0);
+}
+
+/* ---------- codes d'import / export ---------- */
+function encodeCode(obj){ return "LDC1:"+btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }
+function decodeCode(text){
+  const m=String(text).match(/LDC1:([A-Za-z0-9+/=\s]+)/);
+  if(m) return JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/\s/g,"")))));
+  const j=String(text).match(/\{[\s\S]*\}/); if(j) return JSON.parse(j[0]);
+  throw new Error("format");
+}
+function importText(text){
+  const o=decodeCode(text);
+  let nr=0, ni=0;
+  const recs = o.t==="r"? [o.r] : (o.t==="rs"? o.rs : (o.t==="all"? (o.carnet||[]) : (o.ingredients||o.ings? [o] : [])));
+  for(const r of recs){ if(r&&(r.ings||r.ingredients)){ carnetUpsert(r); nr++; } }
+  if(o.t==="all"){
+    for(const it of (o.items||[])){
+      if(!it||!it.name||findItem(it.name)) continue;
+      S.items.push(newItem(it.name, RAYONS.includes(it.rayon)?it.rayon:guessRayon(it.name), it.source==="base"?"base":"perso", false)); ni++;
+    }
+  }
+  if(!nr&&!ni) throw new Error("vide");
+  persist(); render();
+  const parts=[];
+  if(nr) parts.push(nr+" recette"+(nr>1?"s importées":" importée"));
+  if(ni) parts.push(ni+" produit"+(ni>1?"s importés":" importé"));
+  return parts.join(" et ")+".";
+}
+async function copyText(txt,btn,label){
+  try{ await navigator.clipboard.writeText(txt); if(btn) btn.textContent="✓ Copié"; }
+  catch(e){ if(btn) btn.textContent="Copie impossible"; }
+  if(btn) setTimeout(()=>{ if(btn.isConnected) btn.textContent=label; },2000);
+}
+
+/* ---------- feuilles (menus) ---------- */
+function sheet(html,handler){
+  const m=$("modal"); $("sheet").innerHTML=html; m.hidden=false;
+  m.onclick=async ev=>{
+    if(ev.target===m||ev.target.closest("[data-close]")){ m.hidden=true; return; }
+    if(handler) await handler(ev);
+  };
+}
+const closeSheet = () => { $("modal").hidden=true; };
+
+function openMenu(){
+  const online=navigator.onLine;
+  sheet(`<h4>Menu</h4><div class="menu">
+    <button data-act="import">📥 <span>Importer<small>Une recette ou une liste copiée depuis la page Claude</small></span></button>
+    <button data-act="online">🌐 <span>Chercher une nouvelle recette<small>${online?"Ouvre la page Claude (en ligne)":"Indisponible hors ligne"}</small></span></button>
+    <button data-act="backup">💾 <span>Sauvegarder ma liste<small>Copie un code avec tes produits et tes recettes</small></span></button>
+    <button data-act="voice">🗣️ <span>Installer l'appli et l'ouvrir à la voix</span></button>
+  </div><div class="btns"><button data-close style="background:var(--chip)">Fermer</button></div>`, ev=>{
+    const b=ev.target.closest("[data-act]"); if(!b) return;
+    const a=b.dataset.act;
+    if(a==="import") openImport();
+    if(a==="online") openOnline();
+    if(a==="backup") openBackup();
+    if(a==="voice") openVoice();
+  });
+}
+function openImport(){
+  sheet(`<h4>Importer</h4><p>Colle ici le code copié depuis la page Claude (il commence par <b>LDC1:</b>).</p>
+    <textarea id="impTxt" placeholder="LDC1:…"></textarea>
+    <div class="btns"><button id="impPaste" style="background:var(--chip)">📋 Coller</button><button id="impGo" style="background:var(--accent);color:#fff">Importer</button></div>
+    <div class="btns"><button data-close style="background:var(--chip)">Fermer</button></div>`, async ev=>{
+    if(ev.target.id==="impPaste"){ try{ $("impTxt").value=await navigator.clipboard.readText(); }catch(e){ ev.target.textContent="Appui long dans le cadre → Coller"; } }
+    if(ev.target.id==="impGo"){
+      try{ const msg=importText($("impTxt").value); closeSheet(); addMode="recette"; render(); showStatus("✓ "+msg); }
+      catch(e){ ev.target.textContent="Code invalide"; setTimeout(()=>{ if(ev.target.isConnected) ev.target.textContent="Importer"; },2000); }
+    }
+  });
+}
+function openOnline(){
+  sheet(`<h4>Nouvelle recette</h4>
+    <ol class="steps-vo">
+      <li>Ouvre la page Claude (réseau nécessaire) et cherche ta recette, ex : « lasagnes pour 6 ».</li>
+      <li>Ouvre sa fiche, touche <b>📤 Envoyer vers l'appli</b> : le code est copié.</li>
+      <li>Reviens ici : <b>📥 Importer</b> → <b>Coller</b> → <b>Importer</b>.</li>
+    </ol>
+    <p>Elle reste ensuite dans ton carnet, utilisable hors ligne.</p>
+    <div class="btns"><a href="${ONLINE_URL}" target="_blank" rel="noopener" style="flex:1;height:48px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;display:grid;place-content:center;text-decoration:none">Ouvrir la page Claude ↗</a></div>
+    <div class="btns"><button data-close style="background:var(--chip)">Fermer</button></div>`);
+}
+function openBackup(){
+  const code=encodeCode({t:"all",items:S.items.filter(i=>i.source!=="recette").map(i=>({name:i.name,rayon:i.rayon,source:i.source})),carnet:S.carnet});
+  sheet(`<h4>Sauvegarder ma liste</h4><p>Ce code contient tes produits et tes ${S.carnet.length} recette(s). Garde-le (notes, mail) : <b>Importer</b> le restaure.</p>
+    <textarea readonly>${esc(code)}</textarea>
+    <div class="btns"><button id="bkCopy" style="background:var(--accent);color:#fff">📋 Copier le code</button></div>
+    <div class="btns"><button data-close style="background:var(--chip)">Fermer</button></div>`, ev=>{
+    if(ev.target.id==="bkCopy") copyText(code,ev.target,"📋 Copier le code");
+  });
+}
+let installEvt=null;
+window.addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; });
+function openVoice(){
+  const installed = matchMedia("(display-mode: standalone)").matches;
+  sheet(`<h4>Installer et ouvrir à la voix</h4>
+    ${installed?`<p>✓ L'appli est installée.</p>`:(installEvt?`<div class="btns"><button id="instGo" style="background:var(--accent);color:#fff">📲 Installer l'appli</button></div>`:`<ol class="steps-vo"><li>Dans <b>Chrome</b>, menu <b>⋮</b> → <b>Installer l'application</b> (ou « Ajouter à l'écran d'accueil » → Installer).</li></ol>`)}
+    <div class="lbl">Ouvrir à la voix</div>
+    <ol class="steps-vo">
+      <li>Dis : <b>« Hey Google, ouvre Liste de course »</b>.</li>
+      <li>Pour dire seulement « liste de course » : appli Gemini → photo de profil → <b>Infos enregistrées</b> → ajoute <i>Quand je dis « liste de course », ouvre l'appli Liste de course</i>.</li>
+    </ol>
+    <div class="btns"><button data-close style="background:var(--chip)">Fermer</button></div>`, async ev=>{
+    if(ev.target.id==="instGo"&&installEvt){ installEvt.prompt(); await installEvt.userChoice.catch(()=>{}); installEvt=null; closeSheet(); }
+  });
+}
+function openItemSheet(id){
+  const it=S.items.find(i=>i.id===id); if(!it) return;
+  sheet(`<h4>${esc(it.name)}</h4>${it.contribs.length?`<div class="tag">Utilisé par une recette de la liste.</div>`:""}
+    <div class="lbl">Catégorie</div>
+    <div class="catgrid">${RAYONS.map(r=>`<button class="cat${r===it.rayon?" on":""}" data-setcat="${esc(r)}">${esc(r)}</button>`).join("")}</div>
+    <div class="btns"><button data-close style="background:var(--chip)">Fermer</button><button id="mDel" style="background:var(--warn);color:#fff">🗑 Supprimer</button></div>`, ev=>{
+    const b=ev.target.closest("button"); if(!b) return;
+    if(b.dataset.setcat){ it.rayon=b.dataset.setcat; persist(); render(); closeSheet(); toast("« "+it.name+" » déplacé dans "+it.rayon+"."); }
+    if(b.id==="mDel"){ closeSheet(); deleteItem(it.id); }
+  });
+}
+function confirmReset(){
+  sheet(`<p><b>Tout décocher ?</b><br>Toutes les cases sont remises à zéro et les recettes retirées de la liste. Elles restent dans ton carnet. Tes produits restent aussi.</p>
+    <div class="btns"><button data-close style="background:var(--chip)">Annuler</button><button id="mYes" style="background:var(--warn);color:#fff">Tout décocher</button></div>`, ev=>{
+    if(ev.target.id==="mYes"){ closeSheet(); resetAll(); }
+  });
+}
+
+/* ---------- fiche recette ---------- */
+function ficheRecipe(){
+  if(!fiche) return null;
+  if(fiche.rid) return S.recipes.find(r=>r.id===fiche.rid)||null;
+  const r=S.carnet[fiche.idx]; return r? Object.assign({},r,{covers:fiche.covers}) : null;
+}
+function recipeText(r){
+  const f=r.covers/r.base;
+  let t=r.title+" — "+r.covers+" couverts\n";
+  const meta=[r.prep&&"Préparation : "+r.prep, r.cook&&"Cuisson : "+r.cook, r.rest&&"Repos : "+r.rest, r.diff&&"Difficulté : "+r.diff].filter(Boolean);
+  if(meta.length) t+=meta.join(" · ")+"\n";
+  t+="\nINGRÉDIENTS\n"+r.ings.map(i=>{const l=ingLabel(i,f); return "- "+(l.q?l.q+" ":"")+l.name;}).join("\n");
+  if(r.steps.length) t+="\n\nPRÉPARATION\n"+r.steps.map((s,i)=>(i+1)+". "+s).join("\n");
+  if(r.tips.length) t+="\n\nASTUCES\n"+r.tips.map(s=>"- "+s).join("\n");
+  return t;
+}
+function renderFiche(){
+  const el=$("fiche"), r=ficheRecipe();
+  if(!r){ closeFiche(); return; }
+  const f=r.covers/r.base, active=!!fiche.rid;
+  const url="https://www.marmiton.org/recettes/recherche.aspx?aqt="+encodeURIComponent(r.query||r.title);
+  const meta=[r.prep&&"⏱ Prép. "+r.prep, r.cook&&"🔥 Cuisson "+r.cook, r.rest&&"⏸ Repos "+r.rest, r.diff&&"📊 "+cap(r.diff), r.cost&&"💶 "+cap(r.cost)].filter(Boolean);
+  el.innerHTML=`<div class="wrap">
+    <div class="fhead"><h1>${esc(r.title)}</h1><button class="close" id="fClose" aria-label="Fermer">✕</button></div>
+    <div class="meta">${meta.map(m=>`<span>${esc(m)}</span>`).join("")}</div>
+    <div class="fcov">Couverts <span class="stepper"><button data-fcv="-1">−</button><b>${r.covers}</b><button data-fcv="1">+</button></span>
+      ${r.covers!==r.base?`<span class="qty">(recette d'origine : ${r.base})</span>`:""}</div>
+    <h2>Ingrédients</h2>
+    <ul class="ings">${r.ings.map(i=>{const l=ingLabel(i,f); return `<li><b>${esc(l.q||"—")}</b> ${esc(l.name)}</li>`;}).join("")}</ul>
+    ${r.steps.length?`<h2>Préparation</h2><ol class="steps">${r.steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>`:""}
+    ${r.tips.length?`<h2>Astuces</h2><ul class="tips">${r.tips.map(s=>`<li>${esc(s)}</li>`).join("")}</ul>`:""}
+    <div class="flinks">
+      <button id="fCopy">📋 Copier la recette</button>
+      ${navigator.onLine?`<a href="${url}" target="_blank" rel="noopener">Voir sur Marmiton ↗</a>`:""}
+      ${active?`<button class="warnl" id="fRemove">Retirer de la liste</button>`:`<button class="warnl" id="fForget">Supprimer du carnet</button>`}
+    </div>
+  </div>`;
+  $("barInner").innerHTML = active
+    ? `<button class="big sec" id="fClose2" style="flex:1">← Retour à la liste</button>`
+    : `<button class="big" id="fAdd">Ajouter à la liste (${r.covers} couverts)</button>`;
+  el.hidden=false; document.body.style.overflow="hidden";
+}
+function openFiche(spec){ fiche=spec; renderFiche(); $("fiche").scrollTop=0; }
+function closeFiche(){ fiche=null; $("fiche").hidden=true; document.body.style.overflow=""; render(); }
+
+/* ---------- micro (Chrome, nécessite le réseau) ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec=null, listening=false;
+if(SR){
+  $("micBtn").hidden=false;
+  rec=new SR(); rec.lang="fr-FR"; rec.interimResults=true; rec.maxAlternatives=1;
+  rec.onresult=e=>{ let t=""; for(const r of e.results) t+=r[0].transcript; $("qProd").value=t; onQuery("qProd"); };
+  rec.onend=()=>{ listening=false; $("micBtn").classList.remove("live"); };
+  rec.onerror=e=>{ if(e.error==="network") toast("Micro indisponible hors ligne : utilise celui du clavier."); else if(e.error==="not-allowed"){ $("micBtn").hidden=true; } };
+}
+function toggleMic(){
+  if(!rec) return;
+  if(listening){ rec.stop(); return; }
+  try{ rec.start(); listening=true; $("micBtn").classList.add("live"); }catch(e){}
+}
+
+/* ---------- rendu ---------- */
+function rowHtml(it,mode,showRayon){
+  const checked = mode==="shop"? it.inCart : it.needed;
+  const q=qtyText(it);
+  return `<div class="row${mode==="shop"&&it.inCart?" done":""}"><label><input type="checkbox" data-id="${it.id}" ${checked?"checked":""}><span class="name">${esc(it.name)} ${q?`<span class="qty">${esc(q)}</span>`:""}${showRayon?` <span class="tag">· ${esc(it.rayon)}</span>`:""}</span></label><button class="more" data-more="${it.id}" aria-label="Options">⋯</button></div>`;
+}
+function groupByRayon(items){
+  const g={}; for(const it of items){ (g[it.rayon]||(g[it.rayon]=[])).push(it); }
+  return RAYONS.filter(r=>g[r]).map(r=>[r,g[r]]);
+}
+const matches = (txt,q) => fold(txt).includes(fold(q));
+function renderCats(){
+  $("cats").hidden = !Q.qProd;
+  $("cats").innerHTML = RAYONS.map(r=>`<button type="button" class="cat${r===addRayon?" on":""}" data-cat="${esc(r)}">${esc(r)}</button>`).join("");
+  const box=$("cats"), on=box.querySelector(".cat.on");
+  if(on && box.clientWidth){ const l=on.offsetLeft-box.offsetLeft; if(l<box.scrollLeft||l+on.offsetWidth>box.scrollLeft+box.clientWidth) box.scrollLeft=Math.max(0,l-40); }
+}
+function render(){
+  if(fiche){ renderFiche(); return; }
+  const shop=S.mode==="shop";
+  $("offBadge").hidden=navigator.onLine;
+  $("prepHead").hidden=shop; $("shopHead").hidden=!shop;
+  $("segP").classList.toggle("on",addMode==="produit"); $("segR").classList.toggle("on",addMode==="recette");
+  $("prodPanel").hidden=addMode!=="produit"; $("recPanel").hidden=addMode!=="recette";
+  $("title").textContent = shop? "Au magasin" : "Liste de course";
+  $("covVal").textContent=S.covers;
+  for(const k in Q) document.querySelector(`[data-clear="${k}"]`).hidden=!Q[k];
+  renderCats();
+  const needed=S.items.filter(i=>i.needed);
+  let h="";
+  if(!shop){
+    $("sub").textContent = needed.length+" produit"+(needed.length>1?"s":"")+" à acheter";
+    $("recipes").innerHTML = S.recipes.map(r=>
+      `<span class="rchip"><button class="rt" data-open="${r.id}">🍳 ${esc(r.title)}</button><span class="mini"><button data-cv="${r.id}" data-d="-1" aria-label="Moins">−</button><b>${r.covers}</b><button data-cv="${r.id}" data-d="1" aria-label="Plus">+</button></span><button class="x" data-rrm="${r.id}" aria-label="Retirer">✕</button></span>`).join("");
+
+    if(addMode==="produit" && Q.qProd){
+      const found=S.items.filter(i=>matches(i.name,Q.qProd));
+      const exact=found.some(i=>norm(i.name)===norm(Q.qProd));
+      if(!exact) h+=`<button class="addrow" id="addRow">＋ Ajouter « ${esc(cap(Q.qProd.trim()))} » dans ${esc(addRayon)}</button>`;
+      h+= found.length? `<h2>${found.length} résultat${found.length>1?"s":""}</h2><div class="list">${found.map(i=>rowHtml(i,"prep",true)).join("")}</div>` : `<div class="empty">Aucun produit ne correspond.</div>`;
+    }else{
+      if(addMode==="recette"){
+        const list=S.carnet.map((r,i)=>[r,i]).filter(([r])=>!Q.qRec||matches(r.title,Q.qRec)||r.ings.some(g=>matches(g.nom,Q.qRec)));
+        h+=`<h2>Mon carnet (${S.carnet.length})</h2>`;
+        if(!S.carnet.length) h+=`<div class="empty">Ton carnet est vide.<br>Cherche une recette sur la page Claude, puis <b>📤 Envoyer vers l'appli</b> et <b>📥 Importer</b> ici.</div>`;
+        else if(!list.length) h+=`<div class="empty">Aucune recette ne correspond.</div>`;
+        else h+=`<div class="list">${list.map(([r,i])=>`<button class="rrow" data-carnet="${i}"><span class="name"><b>${esc(r.title)}</b><span class="tag">${r.base} pers. · ${r.ings.length} ingrédients${r.prep?" · "+esc(r.prep):""}</span></span><span>›</span></button>`).join("")}</div>`;
+      }
+      const recItems=S.items.filter(i=>i.source==="recette");
+      if(recItems.length) h+=`<h2>Ingrédients des recettes</h2><div class="list">${recItems.map(i=>rowHtml(i,"prep")).join("")}</div>`;
+      const perso=S.items.filter(i=>i.source==="perso");
+      h+=`<h2>Mes ajouts</h2>`+(perso.length? `<div class="list">${perso.map(i=>rowHtml(i,"prep")).join("")}</div>` : `<div class="empty">Tape un produit dans la barre en haut pour le chercher ou l'ajouter.</div>`);
+      h+=`<h2>Produits de base</h2>`;
+      for(const [r,its] of groupByRayon(S.items.filter(i=>i.source==="base"))) h+=`<h3>${esc(r)}</h3><div class="list">${its.map(i=>rowHtml(i,"prep")).join("")}</div>`;
+    }
+    $("barInner").innerHTML = `<button class="big" id="validate" ${needed.length?"":"disabled"}>Valider la liste (${needed.length})</button>`;
+  }else{
+    const done=needed.filter(i=>i.inCart).length;
+    $("sub").textContent = done+" / "+needed.length+" dans le panier";
+    $("prog").style.width = (needed.length? done/needed.length*100:0)+"%";
+    const vis=needed.filter(i=>!Q.qShop||matches(i.name,Q.qShop));
+    if(!needed.length) h+=`<div class="empty">Rien à acheter.</div>`;
+    else if(!vis.length) h+=`<div class="empty">Aucun produit de la liste ne correspond.</div>`;
+    const todo=vis.filter(i=>!i.inCart), got=vis.filter(i=>i.inCart);
+    for(const [r,its] of groupByRayon(todo)) h+=`<h3>${esc(r)}</h3><div class="list">${its.map(i=>rowHtml(i,"shop")).join("")}</div>`;
+    if(got.length) h+=`<h2>Dans le panier</h2><div class="list">${got.map(i=>rowHtml(i,"shop")).join("")}</div>`;
+    $("barInner").innerHTML = `<button class="big sec" id="back">← Liste principale</button>`+
+      (done===needed.length&&needed.length? `<button class="big" id="finish">Courses terminées ✓</button>`:"");
+  }
+  $("main").innerHTML=h;
+}
+function showStatus(t,err){ const st=$("status"); st.hidden=false; st.textContent=t; st.className="status"+(err?" err":""); clearTimeout(st._t); st._t=setTimeout(()=>st.hidden=true,6000); }
+function toast(msg,undo){
+  const t=$("toast"); t.innerHTML=esc(msg)+(undo?`<button id="undoBtn">Annuler</button>`:"");
+  t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast, undo?6000:2500);
+}
+function hideToast(){ $("toast").hidden=true; }
+
+/* ---------- événements ---------- */
+function onQuery(id){
+  Q[id]=$(id).value;
+  if(id==="qProd" && !rayonTouched){ addRayon = Q.qProd ? guessRayon(Q.qProd) : "Autre"; }
+  if(id==="qProd" && !Q.qProd) rayonTouched=false;
+  render();
+}
+document.addEventListener("input",e=>{ if(e.target.id in Q) onQuery(e.target.id); });
+document.addEventListener("change",e=>{
+  const id=e.target.dataset&&e.target.dataset.id; if(!id) return;
+  const it=S.items.find(i=>i.id===id); if(!it) return;
+  if(S.mode==="shop") it.inCart=e.target.checked;
+  else { it.needed=e.target.checked; it.manual=e.target.checked; if(!it.needed) it.inCart=false; }
+  persist();
+  if(S.mode==="shop") setTimeout(render,180); else render();
+});
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button"); if(!t||t.closest("#modal")) return;
+  const d=t.dataset;
+  if(t.id==="micBtn") return toggleMic();
+  if(t.id==="undoBtn") return undoDelete();
+  if(t.id==="menuBtn") return openMenu();
+  if(t.id==="importBtn") return openImport();
+  if(t.id==="onlineBtn") return openOnline();
+  if(t.id==="segP"||t.id==="segR"){ addMode=t.id==="segP"?"produit":"recette"; render(); return; }
+  if(t.id==="addRow") return addProduct();
+  if(d.clear){ $(d.clear).value=""; onQuery(d.clear); $(d.clear).focus(); return; }
+  if(d.cat){ addRayon=d.cat; rayonTouched=true; render(); $("qProd").focus(); return; }
+  if(d.more) return openItemSheet(d.more);
+  if(d.rrm) return removeRecipe(d.rrm);
+  if(d.dcov){ S.covers=clampC(S.covers+ +d.dcov); persist(); render(); return; }
+  if(d.cv){ const r=S.recipes.find(x=>x.id===d.cv); if(r){ r.covers=clampC(r.covers+ +d.d); persist(); render(); } return; }
+  if(d.open) return openFiche({rid:d.open});
+  if(d.carnet!==undefined) return openFiche({idx:+d.carnet, covers:S.covers});
+  if(d.fcv){
+    if(fiche.rid){ const r=S.recipes.find(x=>x.id===fiche.rid); r.covers=clampC(r.covers+ +d.fcv); persist(); }
+    else fiche.covers=clampC(fiche.covers+ +d.fcv);
+    return renderFiche();
+  }
+  if(t.id==="fClose"||t.id==="fClose2") return closeFiche();
+  if(t.id==="fAdd"){ const r=S.carnet[fiche.idx], c=fiche.covers; const added=addRecipe(r,c); fiche={rid:added.id}; renderFiche(); toast("« "+added.title+" » ("+c+" couverts) ajoutée à la liste."); return; }
+  if(t.id==="fRemove"){ const rid=fiche.rid; fiche=null; removeRecipe(rid); return closeFiche(); }
+  if(t.id==="fForget"){ const r=S.carnet[fiche.idx]; S.carnet.splice(fiche.idx,1); persist(); closeFiche(); toast("« "+r.title+" » supprimée du carnet."); return; }
+  if(t.id==="fCopy") return copyText(recipeText(ficheRecipe()),t,"📋 Copier la recette");
+  if(t.id==="validate"){ S.mode="shop"; Q.qShop=""; $("qShop").value=""; persist(); render(); window.scrollTo(0,0); return; }
+  if(t.id==="back"){ S.mode="prep"; persist(); render(); window.scrollTo(0,0); return; }
+  if(t.id==="finish"||t.id==="resetBtn") return confirmReset();
+});
+document.addEventListener("submit",e=>{ e.preventDefault(); if(e.target.id==="addForm") addProduct(); });
+window.addEventListener("online",render); window.addEventListener("offline",render);
+window.addEventListener("storage",e=>{ if(e.key===KEY){ S=load(); render(); } });
+
+render();
+if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script>
+</body>
+</html>
