@@ -615,8 +615,8 @@ function renderFiche(){
     </div>
   </div>`;
   $("barInner").innerHTML = active
-    ? (recipeUsed(r.id) ? `<button class="big sec" id="fClose2" style="flex:1">← Retour à la liste</button>` : `<button class="big sec" id="fClose2">←</button><button class="big" id="fRedo">🔁 Refaire (${r.covers} couverts)</button>`)
-    : `<button class="big" id="fAdd">Ajouter à la liste (${r.covers} couverts)</button>`;
+    ? `<button class="big sec" id="fClose2">←</button><button class="big" id="fRedo">🔁 Refaire (${r.covers} couverts)</button>`
+    : `<button class="big" id="fAdd">${S.recipes.some(x=>norm(x.title)===norm(r.title))?"🔁 Refaire":"🛒 Ajouter à la liste"} (${r.covers} couverts)</button>`;
   el.hidden=false; document.body.style.overflow="hidden";
 }
 function openFiche(spec){ fiche=spec; renderFiche(); $("fiche").scrollTop=0; }
@@ -788,7 +788,11 @@ window.addEventListener("storage",e=>{ if(e.key===KEY){ S=load(); render(); } })
 
 if(mergeDuplicates()) persist();
 render();
-if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").then(reg=>reg.update()).catch(()=>{}));
+  let reloaded=false; // nouvelle version installée : on recharge une fois
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{ if(!reloaded&&navigator.serviceWorker.controller){ reloaded=true; location.reload(); } });
+}
 </script>
 </body>
 </html>
