@@ -368,7 +368,7 @@ function removeRecipe(rid){
     if(!it.contribs.length) return true;
     it.contribs=it.contribs.filter(c=>c.rid!==rid);
     if(it.contribs.length) return true;
-    if(it.source==="recette") return false;
+    if(it.source==="recette") it.source="perso";
     if(!it.manual){ it.needed=false; it.inCart=false; }
     return true;
   });
@@ -410,8 +410,20 @@ function qtyText(it){
   }
   return parts.length? "("+parts.join(" + ")+")" : "";
 }
+function settleCart(){ // retour du magasin : ce qui est dans le panier est soldé
+  let n=0;
+  for(const it of S.items) if(it.needed&&it.inCart){ it.needed=false; it.manual=false; it.inCart=false; it.contribs=[]; if(it.source==="recette") it.source="perso"; n++; }
+  const used=new Set(); S.items.forEach(i=>i.contribs.forEach(c=>used.add(c.rid)));
+  const before=S.recipes.length; S.recipes=S.recipes.filter(r=>used.has(r.id));
+  return {n, done:before-S.recipes.length};
+}
+function leaveShop(finished){
+  const {n,done}=settleCart(); S.mode="prep"; persist(); render(); window.scrollTo(0,0);
+  if(finished) toast("Courses terminées ✓"+(done?" · "+done+" recette"+(done>1?"s":"")+" soldée"+(done>1?"s":""):""));
+  else if(n) toast(n+" produit"+(n>1?"s":"")+" acheté"+(n>1?"s":"")+" retiré"+(n>1?"s":"")+" de la liste"+(done?" · "+done+" recette"+(done>1?"s":"")+" soldée"+(done>1?"s":""):"")+".");
+}
 function resetAll(){
-  S.items=S.items.filter(i=>i.source!=="recette");
+  S.items.forEach(i=>{ if(i.source==="recette") i.source="perso"; });
   S.items.forEach(i=>{i.needed=false;i.manual=false;i.inCart=false;i.contribs=[];});
   S.recipes=[]; S.mode="prep"; persist(); render(); window.scrollTo(0,0);
 }
@@ -545,7 +557,7 @@ function renameItem(it,v){
 }
 
 function confirmReset(){
-  sheet(`<p><b>Tout décocher ?</b><br>Toutes les cases sont remises à zéro et les recettes retirées de la liste. Elles restent dans ton carnet. Tes produits restent aussi.</p>
+  sheet(`<p><b>Tout décocher ?</b><br>Toutes les cases sont remises à zéro et les recettes retirées de la liste (les produits restent, sans quantité). Elles restent dans ton carnet. Tes produits restent aussi.</p>
     <div class="btns"><button data-close style="background:var(--chip)">Annuler</button><button id="mYes" style="background:var(--warn);color:#fff">Tout décocher</button></div>`, ev=>{
     if(ev.target.id==="mYes"){ closeSheet(); resetAll(); }
   });
@@ -751,8 +763,9 @@ document.addEventListener("click",e=>{
   if(t.id==="fCopy") return copyText(recipeText(ficheRecipe()),t,"📋 Copier la recette");
   if(t.id==="share") return shareList(t);
   if(t.id==="validate"){ S.mode="shop"; Q.qShop=""; $("qShop").value=""; persist(); render(); window.scrollTo(0,0); return; }
-  if(t.id==="back"){ S.mode="prep"; persist(); render(); window.scrollTo(0,0); return; }
-  if(t.id==="finish"||t.id==="resetBtn") return confirmReset();
+  if(t.id==="back") return leaveShop(false);
+  if(t.id==="finish") return leaveShop(true);
+  if(t.id==="resetBtn") return confirmReset();
 });
 document.addEventListener("submit",e=>{ e.preventDefault(); if(e.target.id==="addForm") addProduct(); });
 window.addEventListener("online",render); window.addEventListener("offline",render);
