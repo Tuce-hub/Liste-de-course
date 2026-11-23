@@ -1,5 +1,5 @@
 // Service worker : l'appli s'ouvre sans réseau ; avec réseau, elle prend toujours la dernière version.
-const CACHE = "liste-de-course-v9";
+const CACHE = "liste-de-course-v10";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png"];
 
 self.addEventListener("install", e => {
