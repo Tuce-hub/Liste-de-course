@@ -271,7 +271,38 @@ function fmtQty(ing,factor){
 const ingLabel = (ing,f) => ({q:fmtQty(ing,f), name: ing.nom+(ing.precision?" ("+ing.precision+")":"")});
 
 /* ---------- produits ---------- */
-function findItem(name){ const n=norm(name); return S.items.find(i=>i.source!=="recette"&&norm(i.name)===n) || S.items.find(i=>i.source==="recette"&&norm(i.name)===n); }
+/* Même produit malgré l'orthographe : accents, majuscules, pluriel, article, précisions (fin, moulu, doux…), petite faute de frappe */
+const QUALIFS = ["en poudre","en grain","en grains","du moulin","de table","de ble","extra vierge","vierge","extra","fin","fine","gros","grosse","moulu","moulue","noir","noire","doux","douce","frais","fraiche","entier","entiere","demi-ecreme","ecreme","epais","epaisse","bio","nature","melange","melange d'","assortiment"]
+  .map(q=>singular(fold(q))).sort((a,b)=>b.length-a.length);
+function prodKey(name){
+  let k=norm(String(name||"").replace(/\(.*?\)/g," "));
+  k=k.replace(/^melange (de |d')?/,"");
+  let words=k.split(" ");
+  if(words.length>1){
+    let rest=" "+words.slice(1).join(" ")+" ";
+    for(const q of QUALIFS) rest=rest.split(" "+q+" ").join(" ");
+    k=(words[0]+" "+rest).replace(/\s+/g," ").trim();
+  }
+  return k;
+}
+function lev1(a,b){ // distance d'édition <= 1 ?
+  if(a===b) return true; const la=a.length, lb=b.length; if(Math.abs(la-lb)>1) return false;
+  let i=0,j=0,e=0;
+  while(i<la&&j<lb){ if(a[i]===b[j]){i++;j++;continue;} if(++e>1) return false; if(la>lb) i++; else if(lb>la) j++; else {i++;j++;} }
+  return e+(la-i)+(lb-j)<=1;
+}
+function sameProduct(a,b){ const ka=prodKey(a), kb=prodKey(b); return ka===kb || (ka.length>=7&&kb.length>=7&&lev1(ka,kb)); }
+function findItem(name){ return S.items.find(i=>i.source!=="recette"&&sameProduct(i.name,name)) || S.items.find(i=>i.source==="recette"&&sameProduct(i.name,name)); }
+function mergeDuplicates(){ // fusionne les doublons déjà présents
+  const out=[];
+  for(const it of S.items){
+    const tw=out.find(o=>sameProduct(o.name,it.name));
+    if(!tw){ out.push(it); continue; }
+    if(tw.source==="recette"&&it.source!=="recette"){ tw.source=it.source; tw.name=it.name; tw.rayon=it.rayon; }
+    tw.contribs=tw.contribs.concat(it.contribs); tw.needed=tw.needed||it.needed; tw.manual=tw.manual||it.manual; tw.inCart=tw.inCart&&it.inCart;
+  }
+  const changed=out.length!==S.items.length; S.items=out; return changed;
+}
 function addProduct(){
   const inp=$("qProd"); const n=inp.value.trim(); if(!n) return;
   const ex=findItem(n);
@@ -310,7 +341,7 @@ function addRecipe(rec,covers){
   S.recipes.push(r);
   r.ings.forEach((ing,i)=>{
     let it=findItem(ing.nom);
-    if(!it){ it=newItem(ing.nom,ing.rayon,"recette",false); S.items.push(it); }
+    if(!it){ it=newItem(ing.nom,RAYONS.includes(ing.rayon)?ing.rayon:guessRayon(ing.nom),"recette",false); S.items.push(it); }
     it.contribs.push({rid,i}); it.needed=true;
   });
   persist(); render(); return r;
@@ -530,8 +561,27 @@ function rowHtml(it,mode,showRayon){
   const q=qtyText(it);
   return `<div class="row${mode==="shop"&&it.inCart?" done":""}"><label><input type="checkbox" data-id="${it.id}" ${checked?"checked":""}><span class="name">${esc(it.name)} ${q?`<span class="qty">${esc(q)}</span>`:""}${showRayon?` <span class="tag">· ${esc(it.rayon)}</span>`:""}</span></label><button class="more" data-more="${it.id}" aria-label="Options">⋯</button></div>`;
 }
+function shareText(){
+  const shop=S.mode==="shop";
+  const items=S.items.filter(i=>i.needed&&!(shop&&i.inCart));
+  let t="🛒 Liste de course"+(shop?" (reste à prendre)":"")+" : "+items.length+" produit"+(items.length>1?"s":"")+"\n";
+  for(const [r,its] of groupByRayon(items)){
+    t+="\n"+r.toUpperCase()+"\n"+its.map(i=>{ const q=qtyText(i); return "▢ "+i.name+(q?" "+q:""); }).join("\n")+"\n";
+  }
+  if(S.recipes.length) t+="\n🍳 "+S.recipes.map(r=>r.title+" ("+r.covers+" couverts)").join(", ");
+  return t.trim();
+}
+async function shareList(btn){
+  const text=shareText();
+  if(navigator.share){
+    try{ await navigator.share({title:"Liste de course",text}); return; }
+    catch(e){ if(e&&e.name==="AbortError") return; }
+  }
+  try{ await navigator.clipboard.writeText(text); toast("Liste copiée : colle-la dans ton SMS ou Messenger."); }
+  catch(e){ sheet(`<h4>Liste à copier</h4><textarea readonly>${esc(text)}</textarea><div class="btns"><button data-close style="background:var(--chip)">Fermer</button></div>`); }
+}
 function groupByRayon(items){
-  const g={}; for(const it of items){ (g[it.rayon]||(g[it.rayon]=[])).push(it); }
+  const g={}; for(const it of [...items].sort((a,b)=>a.name.localeCompare(b.name,"fr"))){ const k=RAYONS.includes(it.rayon)?it.rayon:"Autre"; (g[k]||(g[k]=[])).push(it); }
   return RAYONS.filter(r=>g[r]).map(r=>[r,g[r]]);
 }
 const matches = (txt,q) => fold(txt).includes(fold(q));
@@ -572,14 +622,10 @@ function render(){
         else if(!list.length) h+=`<div class="empty">Aucune recette ne correspond.</div>`;
         else h+=`<div class="list">${list.map(([r,i])=>`<button class="rrow" data-carnet="${i}"><span class="name"><b>${esc(r.title)}</b><span class="tag">${r.base} pers. · ${r.ings.length} ingrédients${r.prep?" · "+esc(r.prep):""}</span></span><span>›</span></button>`).join("")}</div>`;
       }
-      const recItems=S.items.filter(i=>i.source==="recette");
-      if(recItems.length) h+=`<h2>Ingrédients des recettes</h2><div class="list">${recItems.map(i=>rowHtml(i,"prep")).join("")}</div>`;
-      const perso=S.items.filter(i=>i.source==="perso");
-      h+=`<h2>Mes ajouts</h2>`+(perso.length? `<div class="list">${perso.map(i=>rowHtml(i,"prep")).join("")}</div>` : `<div class="empty">Tape un produit dans la barre en haut pour le chercher ou l'ajouter.</div>`);
-      h+=`<h2>Produits de base</h2>`;
-      for(const [r,its] of groupByRayon(S.items.filter(i=>i.source==="base"))) h+=`<h3>${esc(r)}</h3><div class="list">${its.map(i=>rowHtml(i,"prep")).join("")}</div>`;
+      h+=`<h2>Produits</h2>`;
+      for(const [r,its] of groupByRayon(S.items)) h+=`<h3>${esc(r)}</h3><div class="list">${its.map(i=>rowHtml(i,"prep")).join("")}</div>`;
     }
-    $("barInner").innerHTML = `<button class="big" id="validate" ${needed.length?"":"disabled"}>Valider la liste (${needed.length})</button>`;
+    $("barInner").innerHTML = `<button class="big sec" id="share" ${needed.length?"":"disabled"} aria-label="Partager la liste">📤</button><button class="big" id="validate" ${needed.length?"":"disabled"}>Valider la liste (${needed.length})</button>`;
   }else{
     const done=needed.filter(i=>i.inCart).length;
     $("sub").textContent = done+" / "+needed.length+" dans le panier";
@@ -590,7 +636,7 @@ function render(){
     const todo=vis.filter(i=>!i.inCart), got=vis.filter(i=>i.inCart);
     for(const [r,its] of groupByRayon(todo)) h+=`<h3>${esc(r)}</h3><div class="list">${its.map(i=>rowHtml(i,"shop")).join("")}</div>`;
     if(got.length) h+=`<h2>Dans le panier</h2><div class="list">${got.map(i=>rowHtml(i,"shop")).join("")}</div>`;
-    $("barInner").innerHTML = `<button class="big sec" id="back">← Liste principale</button>`+
+    $("barInner").innerHTML = `<button class="big sec" id="back">← Liste</button>`+(done<needed.length?`<button class="big sec" id="share" aria-label="Partager ce qui reste">📤</button>`:"")+
       (done===needed.length&&needed.length? `<button class="big" id="finish">Courses terminées ✓</button>`:"");
   }
   $("main").innerHTML=h;
@@ -646,6 +692,7 @@ document.addEventListener("click",e=>{
   if(t.id==="fRemove"){ const rid=fiche.rid; fiche=null; removeRecipe(rid); return closeFiche(); }
   if(t.id==="fForget"){ const r=S.carnet[fiche.idx]; S.carnet.splice(fiche.idx,1); persist(); closeFiche(); toast("« "+r.title+" » supprimée du carnet."); return; }
   if(t.id==="fCopy") return copyText(recipeText(ficheRecipe()),t,"📋 Copier la recette");
+  if(t.id==="share") return shareList(t);
   if(t.id==="validate"){ S.mode="shop"; Q.qShop=""; $("qShop").value=""; persist(); render(); window.scrollTo(0,0); return; }
   if(t.id==="back"){ S.mode="prep"; persist(); render(); window.scrollTo(0,0); return; }
   if(t.id==="finish"||t.id==="resetBtn") return confirmReset();
@@ -654,6 +701,7 @@ document.addEventListener("submit",e=>{ e.preventDefault(); if(e.target.id==="ad
 window.addEventListener("online",render); window.addEventListener("offline",render);
 window.addEventListener("storage",e=>{ if(e.key===KEY){ S=load(); render(); } });
 
+if(mergeDuplicates()) persist();
 render();
 if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>
